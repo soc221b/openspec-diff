@@ -1,5 +1,6 @@
-Select a change to diff:
+? Select a change to diff
 1. new-spec-file
-> Diffing capability-new/spec.md
+> 
+Diffing capability-new/spec.md
 0a1
 > # capability new spec

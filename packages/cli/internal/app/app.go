@@ -20,6 +20,8 @@ const (
 	specFileName      = "spec.md"
 )
 
+var errNoChanges = errors.New("no active changes found")
+
 type CommandRunner func(ctx context.Context, dir string, name string, args ...string) error
 
 type specPair struct {
@@ -36,6 +38,11 @@ func Run(ctx context.Context, stdin io.Reader, stdout io.Writer, workDir string,
 
 	changes, err := listChanges(repoRoot)
 	if err != nil {
+		if errors.Is(err, errNoChanges) {
+			_, _ = fmt.Fprintln(stdout, "No active changes found.")
+			_, _ = fmt.Fprintln(stdout, "No change selected. Aborting.")
+			return nil
+		}
 		return err
 	}
 
@@ -118,14 +125,14 @@ func listChanges(repoRoot string) ([]string, error) {
 
 	sort.Strings(changes)
 	if len(changes) == 0 {
-		return nil, errors.New("no changes found in openspec/changes (excluding archive and hidden directories)")
+		return nil, errNoChanges
 	}
 
 	return changes, nil
 }
 
 func selectChange(stdin io.Reader, stdout io.Writer, changes []string) (string, error) {
-	_, _ = fmt.Fprintln(stdout, "Select a change to diff:")
+	_, _ = fmt.Fprintln(stdout, "? Select a change to diff")
 	for index, change := range changes {
 		_, _ = fmt.Fprintf(stdout, "%d. %s\n", index+1, change)
 	}
@@ -145,11 +152,13 @@ func selectChange(stdin io.Reader, stdout io.Writer, changes []string) (string, 
 		if index < 1 || index > len(changes) {
 			return "", fmt.Errorf("selection %d is out of range", index)
 		}
+		_, _ = fmt.Fprintln(stdout)
 		return changes[index-1], nil
 	}
 
 	for _, change := range changes {
 		if change == selection {
+			_, _ = fmt.Fprintln(stdout)
 			return change, nil
 		}
 	}
