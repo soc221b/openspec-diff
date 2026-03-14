@@ -10,10 +10,10 @@ Diffing capability-new/spec.md
 > 
 > ## ADDED Requirements
 > 
-> ### Requirement: Capability New behavior
+> ### Requirement: Capability New
 > The system SHALL support capability new spec.
 > 
-> #### Scenario: Capability New is added
-> - GIVEN capability new is not yet supported
-> - WHEN a user requests capability new
-> - THEN the system fulfills capability new spec
+> #### Scenario: Added
+> - GIVEN no capability new
+> - WHEN requested
+> - THEN capability new spec

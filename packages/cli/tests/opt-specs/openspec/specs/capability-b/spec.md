@@ -1,14 +1,14 @@
-# Capability B Specification
+# Capability B
 
 ## Purpose
-Defines the behavior for capability b.
+capability b.
 
 ## Requirements
 
-### Requirement: Capability B behavior
+### Requirement: Capability B
 The system SHALL support main capability b.
 
-#### Scenario: Capability B is requested
-- GIVEN capability b is available
-- WHEN a user requests capability b
-- THEN the system fulfills main capability b
+#### Scenario: Main
+- GIVEN capability b
+- WHEN requested
+- THEN main capability b
