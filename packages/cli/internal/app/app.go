@@ -18,6 +18,7 @@ const (
 	changesDirectory  = "changes"
 	specsDirectory    = "specs"
 	specFileName      = "spec.md"
+	// The prompt includes the question line, one blank line, and the navigation hint line.
 	promptOverhead    = 3
 )
 
