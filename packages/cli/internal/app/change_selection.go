@@ -46,16 +46,16 @@ func selectChange(stdin io.Reader, stdout io.Writer, changes []string) (string, 
 	for {
 		input, err := reader.ReadByte()
 		if err != nil {
-			return resolveSelection(stdout, changes, selectedIndex, typedSelection.String(), true, err)
+			return resolveSelection(stdout, changes, selectedIndex, typedSelection.String(), err)
 		}
 
 		switch input {
 		case '\r', '\n':
-			return resolveSelection(stdout, changes, selectedIndex, typedSelection.String(), false, nil)
+			return resolveSelection(stdout, changes, selectedIndex, typedSelection.String(), nil)
 		case '\x1b':
 			next, direction, handled, err := readArrowKey(reader)
 			if err != nil {
-				return resolveSelection(stdout, changes, selectedIndex, typedSelection.String(), true, err)
+				return resolveSelection(stdout, changes, selectedIndex, typedSelection.String(), err)
 			}
 			if !handled {
 				typedSelection.WriteByte(input)
@@ -84,14 +84,14 @@ func selectChange(stdin io.Reader, stdout io.Writer, changes []string) (string, 
 	}
 }
 
-func resolveSelection(stdout io.Writer, changes []string, selectedIndex int, rawSelection string, eof bool, readErr error) (string, error) {
+func resolveSelection(stdout io.Writer, changes []string, selectedIndex int, rawSelection string, readErr error) (string, error) {
 	if readErr != nil && !isEOF(readErr) {
 		return "", readErr
 	}
 
 	selection := strings.TrimSpace(rawSelection)
 	if selection == "" {
-		if eof {
+		if isEOF(readErr) {
 			return "", errNoSelection
 		}
 

@@ -68,19 +68,19 @@ func selectSpecs(stdin io.Reader, stdout io.Writer, specs []string) ([]string, e
 	for {
 		input, err := reader.ReadByte()
 		if err != nil {
-			return resolveSpecSelections(stdout, specs, selected, typedSelection.String(), true, err)
+			return resolveSpecSelections(stdout, specs, selected, typedSelection.String(), err)
 		}
 
 		switch input {
 		case '\r', '\n':
-			return resolveSpecSelections(stdout, specs, selected, typedSelection.String(), false, nil)
+			return resolveSpecSelections(stdout, specs, selected, typedSelection.String(), nil)
 		case ' ':
 			selected[selectedIndex] = !selected[selectedIndex]
 			renderPrompt()
 		case '\x1b':
 			next, direction, handled, err := readArrowKey(reader)
 			if err != nil {
-				return resolveSpecSelections(stdout, specs, selected, typedSelection.String(), true, err)
+				return resolveSpecSelections(stdout, specs, selected, typedSelection.String(), err)
 			}
 			if !handled {
 				typedSelection.WriteByte(input)
@@ -109,7 +109,7 @@ func selectSpecs(stdin io.Reader, stdout io.Writer, specs []string) ([]string, e
 	}
 }
 
-func resolveSpecSelections(stdout io.Writer, specs []string, selected []bool, rawSelection string, eof bool, readErr error) ([]string, error) {
+func resolveSpecSelections(stdout io.Writer, specs []string, selected []bool, rawSelection string, readErr error) ([]string, error) {
 	if readErr != nil && !isEOF(readErr) {
 		return nil, readErr
 	}
