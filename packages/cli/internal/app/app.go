@@ -38,7 +38,7 @@ type specPair struct {
 	mainPath   string
 }
 
-func Run(ctx context.Context, stdin io.Reader, stdout io.Writer, workDir string, changeName string, specName string, run CommandRunner) error {
+func Run(ctx context.Context, stdin io.Reader, stdout io.Writer, workDir string, changeName string, specName string, diffCommand string, run CommandRunner) error {
 	repoRoot, err := findRepoRoot(workDir)
 	if err != nil {
 		return err
@@ -84,23 +84,9 @@ func Run(ctx context.Context, stdin io.Reader, stdout io.Writer, workDir string,
 	}
 
 	for _, pair := range selectedSpecPairs {
-		mainPath := pair.mainPath
-		cleanup := func() error { return nil }
-		if mainPath == "" {
-			mainPath, cleanup, err = createEmptySpecPlaceholder()
-			if err != nil {
-				return err
-			}
-		}
-
 		_, _ = fmt.Fprintf(stdout, "Diffing %s\n", pair.name)
-		runErr := run(ctx, repoRoot, "git", "difftool", "--no-prompt", "--no-index", mainPath, pair.changePath)
-		cleanupErr := cleanup()
-		if runErr != nil {
-			return runErr
-		}
-		if cleanupErr != nil {
-			return cleanupErr
+		if err := run(ctx, repoRoot, diffCommand, pair.mainPath, pair.changePath); err != nil {
+			return err
 		}
 	}
 
@@ -457,11 +443,6 @@ func collectSpecPairs(repoRoot, change string) ([]specPair, error) {
 		}
 
 		mainPath := filepath.Join(repoRoot, openspecDirectory, specsDirectory, relativePath)
-		if _, err := os.Stat(mainPath); errors.Is(err, os.ErrNotExist) {
-			mainPath = ""
-		} else if err != nil {
-			return err
-		}
 
 		pairs = append(pairs, specPair{
 			name:       filepath.ToSlash(relativePath),
@@ -481,21 +462,6 @@ func collectSpecPairs(repoRoot, change string) ([]specPair, error) {
 	})
 
 	return pairs, nil
-}
-
-func createEmptySpecPlaceholder() (string, func() error, error) {
-	file, err := os.CreateTemp("", "openspec-diff-empty-spec-*.md")
-	if err != nil {
-		return "", nil, err
-	}
-	if err := file.Close(); err != nil {
-		_ = os.Remove(file.Name())
-		return "", nil, err
-	}
-
-	return file.Name(), func() error {
-		return os.Remove(file.Name())
-	}, nil
 }
 
 func isDirectory(path string) bool {

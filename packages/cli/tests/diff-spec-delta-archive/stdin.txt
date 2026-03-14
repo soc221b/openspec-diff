@@ -1,0 +1,2 @@
+openspec-diff
+\n # select the first change

@@ -20,7 +20,7 @@ fi
 
 (
 	cd "$TMP_DIR"
-	FIXTURE_STDIN_PATH="$FIXTURE_DIR/stdin.txt" FIXTURE_STDOUT_PATH="$TMP_DIR/stdout.txt" FIXTURE_STDERR_PATH="$TMP_DIR/stderr.txt" python - <<'PY' "$CLI_BIN"
+	PATH="$FIXTURE_DIR/mock-bin:$PATH" FIXTURE_STDIN_PATH="$FIXTURE_DIR/stdin.txt" FIXTURE_STDOUT_PATH="$TMP_DIR/stdout.txt" FIXTURE_STDERR_PATH="$TMP_DIR/stderr.txt" python - <<'PY' "$CLI_BIN"
 import codecs
 import os
 import re
