@@ -162,7 +162,7 @@ func selectChange(stdin io.Reader, stdout io.Writer, changes []string) (string, 
 			_, _ = fmt.Fprintf(stdout, "%s %s\n", prefix, change)
 		}
 		_, _ = fmt.Fprintln(stdout)
-		_, _ = fmt.Fprintln(stdout, "↑↓ navigate • ⏎ select")
+		_, _ = fmt.Fprintln(stdout, "↑↓ navigate • ⏎ select • type a 1-based index or exact change name")
 		rendered = true
 	}
 

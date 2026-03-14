@@ -1,0 +1,2 @@
+openspec-diff
+2\n # \n submits the typed 1-based index
