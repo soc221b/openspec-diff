@@ -37,11 +37,14 @@ stdout_path = os.environ["FIXTURE_STDOUT_PATH"]
 stderr_path = os.environ["FIXTURE_STDERR_PATH"]
 command = sys.argv[1:]
 command_name = os.path.basename(command[0])
+# These short delays are only to let interactive prompt redraws settle between
+# scripted keystrokes and before a scripted Ctrl-C snapshot.
 STEP_SETTLE_DELAY_SECONDS = 0.05
 INTERRUPT_SETTLE_DELAY_SECONDS = 0.1
 
 
 def decode_instruction(value: str, line_number: int) -> str:
+    """Decode unicode escapes used by scripted stdin fixture instructions."""
     try:
         return codecs.decode(value, "unicode_escape")
     except UnicodeDecodeError as error:
@@ -51,6 +54,7 @@ def decode_instruction(value: str, line_number: int) -> str:
 
 
 def normalize_output(value: str) -> str:
+    """Strip cursor-up and clear-screen redraw escapes from interactive output."""
     normalized = value.rsplit("\x1b[J", 1)[-1]
     return re.sub(r"\x1b\[\d+A", "", normalized)
 
