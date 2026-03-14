@@ -4,14 +4,10 @@ import { getWelcomeMessage } from "./message.js";
 
 let helloCommand: vscode.Disposable | undefined;
 
-export function activate(context: vscode.ExtensionContext) {
-  helloCommand?.dispose();
-
+export function activate(_context: vscode.ExtensionContext) {
   helloCommand = vscode.commands.registerCommand("openspecDiff.hello", () => {
     void vscode.window.showInformationMessage(getWelcomeMessage());
   });
-
-  context.subscriptions.push(helloCommand);
 }
 
 export function deactivate() {
