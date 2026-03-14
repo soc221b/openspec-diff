@@ -31,6 +31,7 @@ type CommandRunner func(ctx context.Context, dir string, name string, args ...st
 
 type specPair struct {
 	name       string
+	selector   string
 	changePath string
 	mainPath   string
 }
@@ -285,7 +286,7 @@ func selectRequestedSpec(stdin io.Reader, stdout io.Writer, specPairs []specPair
 	options := make([]string, 0, len(specPairs)+1)
 	options = append(options, "all")
 	for _, pair := range specPairs {
-		options = append(options, pair.name)
+		options = append(options, pair.selector)
 	}
 
 	selectedSpec, err := selectSpec(stdin, stdout, options)
@@ -405,7 +406,7 @@ func filterSpecPairs(specPairs []specPair, selection string) ([]specPair, error)
 	}
 
 	for _, pair := range specPairs {
-		if pair.name == selection {
+		if pair.selector == selection {
 			return []specPair{pair}, nil
 		}
 	}
@@ -442,6 +443,7 @@ func collectSpecPairs(repoRoot, change string) ([]specPair, error) {
 
 		pairs = append(pairs, specPair{
 			name:       filepath.ToSlash(relativePath),
+			selector:   specSelectorName(relativePath),
 			changePath: path,
 			mainPath:   mainPath,
 		})
@@ -477,4 +479,14 @@ func createEmptySpecPlaceholder() (string, func() error, error) {
 func isDirectory(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()
+}
+
+func specSelectorName(relativePath string) string {
+	normalizedPath := filepath.ToSlash(relativePath)
+	selector := strings.TrimSuffix(normalizedPath, "/"+specFileName)
+	if selector == normalizedPath && normalizedPath == specFileName {
+		return "spec"
+	}
+
+	return selector
 }

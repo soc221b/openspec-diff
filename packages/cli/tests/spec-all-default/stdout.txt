@@ -1,7 +1,7 @@
 ? Select a spec to diff
 ❯ all
-  capability-a/spec.md
-  capability-b/spec.md
+  capability-a
+  capability-b
 
 ↑↓ navigate • ⏎ select
 ✔ Select a spec to diff all

@@ -1,1 +1,1 @@
-openspec-diff two-specs capability-b/spec.md
+openspec-diff two-specs capability-b
