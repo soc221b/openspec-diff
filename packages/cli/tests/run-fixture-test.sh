@@ -57,7 +57,15 @@ def normalize_output(value: str) -> str:
 
 
 def parse_invocation(value: str, line_number: int) -> list[str]:
-    """Parse a readable CLI invocation line from stdin.txt."""
+    """Parse a readable CLI invocation line from stdin.txt.
+
+    Args:
+        value: The uncommented line content from stdin.txt.
+        line_number: The 1-based source line number for error reporting.
+
+    Returns:
+        The shell-style tokenized CLI invocation from stdin.txt.
+    """
     try:
         return shlex.split(value)
     except ValueError as error:
@@ -67,7 +75,16 @@ def parse_invocation(value: str, line_number: int) -> list[str]:
 
 
 def strip_inline_comment(value: str) -> str:
-    """Drop unquoted trailing # comments without disturbing input escapes."""
+    """Drop unquoted trailing # comments without disturbing input escapes.
+
+    Args:
+        value: A raw stdin.txt line that may include quotes, escapes, and a
+            trailing shell-style comment.
+
+    Returns:
+        The line content with only an unquoted trailing comment removed, while
+        preserving quoted or escaped # characters used as real input.
+    """
     escaped = False
     quote = None
 
