@@ -4,13 +4,12 @@
 ↑↓ navigate • ⏎ select
 ✔ Select a change to diff two-specs
 
-? Select a spec to diff
-❯ all
-  capability-a
-  capability-b
+? Select specs to diff
+❯ ◉ capability-a
+  ◉ capability-b
 
-↑↓ navigate • ⏎ select
-✔ Select a spec to diff all
+↑↓ navigate • space toggle • ⏎ submit
+✔ Select specs to diff capability-a, capability-b
 
 Diffing capability-a/spec.md
 1c1

@@ -11,7 +11,7 @@ import (
 	"github.com/soc221b/openspec-diff/packages/cli/internal/app"
 )
 
-const helpText = `Usage: openspec-diff [options] [change-name] [spec-name]
+const helpText = `Usage: openspec-diff [options] [change-name] [spec-name[,spec-name...]]
 
 Show changes between delta specs of a change and the main specs
 
