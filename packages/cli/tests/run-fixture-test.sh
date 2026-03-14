@@ -86,8 +86,9 @@ def strip_inline_comment(value: str) -> str:
     Returns:
         The line content with only an unquoted trailing comment removed, while
         preserving quoted or escaped # characters used as real input. When no
-        unquoted comment marker is present, this returns the stripped original
-        line; comment-only lines normalize to an empty string.
+        unquoted comment marker is present, this returns the original line with
+        leading and trailing whitespace removed; comment-only lines normalize
+        to an empty string.
     """
     escaped = False
     quote = None
@@ -156,7 +157,7 @@ with open(stdin_path, encoding="utf-8") as handle:
         if not seen_instruction:
             invocation = parse_invocation(instruction, line_number)
             seen_instruction = True
-            if invocation and os.path.basename(invocation[0]) == command_name:
+            if len(invocation) > 0 and os.path.basename(invocation[0]) == command_name:
                 command.extend(invocation[1:])
                 continue
         instructions.append((line_number, instruction))
