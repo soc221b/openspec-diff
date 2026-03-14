@@ -40,6 +40,7 @@ command = sys.argv[1:]
 command_name = os.path.basename(command[0])
 OUTPUT_IDLE_TIMEOUT_SECONDS = 0.2
 OUTPUT_POLL_INTERVAL_SECONDS = 0.01
+INITIAL_OUTPUT_LENGTH = 0
 
 
 def decode_instruction(value: str, line_number: int) -> str:
@@ -58,7 +59,7 @@ def normalize_output(value: str) -> str:
     return re.sub(r"\x1b\[\d+A", "", normalized)
 
 
-def read_stream(stream, buffer):
+def read_stream_to_buffer(stream, buffer):
     while True:
         chunk = stream.read(1)
         if chunk == "":
@@ -67,7 +68,7 @@ def read_stream(stream, buffer):
 
 
 def wait_for_new_output(process, buffer, previous_length):
-    """Wait briefly for stdout to grow after scripted input or until exit."""
+    """Wait briefly for a captured output buffer to grow after scripted input."""
     deadline = time.monotonic() + OUTPUT_IDLE_TIMEOUT_SECONDS
     while time.monotonic() < deadline:
         if len(buffer) > previous_length or process.poll() is not None:
@@ -88,8 +89,8 @@ abort_requested = False
 seen_instruction = False
 stdout_buffer = []
 stderr_buffer = []
-stdout_thread = threading.Thread(target=read_stream, args=(process.stdout, stdout_buffer))
-stderr_thread = threading.Thread(target=read_stream, args=(process.stderr, stderr_buffer))
+stdout_thread = threading.Thread(target=read_stream_to_buffer, args=(process.stdout, stdout_buffer))
+stderr_thread = threading.Thread(target=read_stream_to_buffer, args=(process.stderr, stderr_buffer))
 stdout_thread.start()
 stderr_thread.start()
 
@@ -107,7 +108,7 @@ with open(stdin_path, encoding="utf-8") as handle:
 
         if instruction == "^C":
             abort_requested = True
-            wait_for_new_output(process, stdout_buffer, 0)
+            wait_for_new_output(process, stdout_buffer, INITIAL_OUTPUT_LENGTH)
             os.killpg(process.pid, signal.SIGINT)
             break
 
