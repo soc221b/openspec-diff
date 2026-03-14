@@ -180,6 +180,13 @@ stderr_thread = threading.Thread(target=read_stream_to_buffer, args=(process.std
 stdout_thread.start()
 stderr_thread.start()
 
+error_message = None
+
+if len(instructions) == 0:
+    process.stdin.close()
+    process.stdin = None
+    wait_for_output_to_settle(process, stdout_buffer)
+
 for line_number, instruction in instructions:
     if instruction == "^C":
         abort_requested = True
@@ -190,10 +197,19 @@ for line_number, instruction in instructions:
     process.stdin.write(decode_instruction(instruction, line_number))
     process.stdin.flush()
     wait_for_output_to_settle(process, stdout_buffer)
+    if process.poll() is not None:
+        break
 
-if not abort_requested:
-    process.stdin.close()
-    process.stdin = None
+if not abort_requested and process.poll() is None:
+    last_line_number = instructions[-1][0] if instructions else 1
+    error_message = (
+        f"{stdin_path}:{last_line_number}: process did not exit after scripted input; "
+        "add ^C or explicit submit input such as \\n"
+    )
+    if process.stdin is not None:
+        process.stdin.close()
+        process.stdin = None
+    os.killpg(process.pid, signal.SIGINT)
 
 process.wait()
 stdout_thread.join()
@@ -206,6 +222,9 @@ with open(stdout_path, "w", encoding="utf-8") as handle:
 
 with open(stderr_path, "w", encoding="utf-8") as handle:
     handle.write(stderr)
+
+if error_message is not None:
+    sys.exit(error_message)
 
 # Exit code 1 is acceptable here because git diff uses it to signal
 # "differences found", and fixture tests snapshot that diff output as success.
