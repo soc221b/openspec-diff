@@ -1,0 +1,12 @@
+#!/usr/bin/env python3
+import pathlib
+import sys
+
+repo_root = pathlib.Path.cwd()
+change_name = sys.argv[2]
+output_spec = repo_root / "openspec" / "specs" / "capability-a" / "spec.md"
+output_spec.parent.mkdir(parents=True, exist_ok=True)
+output_spec.write_text(
+    "# Capability A\n\n## Requirements\n\n### Requirement: Renamed Name\nOriginal behavior.\n",
+    encoding="utf-8",
+)

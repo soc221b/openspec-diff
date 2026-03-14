@@ -1,0 +1,1 @@
+openspec-difftool ./openspec/specs/capability-a/spec.md ./openspec/changes/change-a/specs/capability-a/spec.md

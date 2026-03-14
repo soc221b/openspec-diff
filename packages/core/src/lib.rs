@@ -115,7 +115,7 @@ fn preprocess_change_spec(
     openspec_command: &OsStr,
     guards: &mut Vec<TempPathGuard>,
 ) -> Result<PathBuf, String> {
-    let temp_root = create_temp_directory("openspec-diff-core")?;
+    let temp_root = create_temp_directory("openspec-difftool")?;
     let temp_guard = TempPathGuard::new(temp_root.clone());
 
     let temp_change_spec_path = temp_root.join(context.change_spec_relative_path());
@@ -318,115 +318,5 @@ impl TempPathGuard {
 impl Drop for TempPathGuard {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.path);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{ChangeSpecContext, change_spec_context, prepare_diff_inputs};
-    use std::ffi::OsStr;
-    use std::fs;
-    use std::path::{Path, PathBuf};
-
-    #[test]
-    fn detects_change_spec_context() {
-        let path = Path::new("/repo/openspec/changes/change-a/specs/capability-a/spec.md");
-
-        let context = change_spec_context(path).expect("expected change spec context");
-
-        assert_eq!(
-            context,
-            ChangeSpecContext {
-                repo_root: PathBuf::from("/repo"),
-                change_name: "change-a".to_owned(),
-                relative_spec_path: PathBuf::from("capability-a/spec.md"),
-                change_spec_path: PathBuf::from(
-                    "/repo/openspec/changes/change-a/specs/capability-a/spec.md"
-                ),
-                main_spec_path: PathBuf::from("/repo/openspec/specs/capability-a/spec.md"),
-            }
-        );
-    }
-
-    #[test]
-    fn uses_empty_placeholder_for_missing_non_change_inputs() {
-        let prepared = prepare_diff_inputs(
-            "/tmp/openspec-diff-core-missing-left/spec.md",
-            "/tmp/openspec-diff-core-missing-right/spec.md",
-            OsStr::new("openspec"),
-        )
-        .expect("expected placeholder inputs");
-
-        assert!(prepared.left.exists());
-        assert!(prepared.right.exists());
-        assert_eq!(fs::read_to_string(prepared.left).unwrap(), "");
-        assert_eq!(fs::read_to_string(prepared.right).unwrap(), "");
-    }
-
-    #[test]
-    fn archives_delta_specs_before_diffing() {
-        let repo_root = create_test_directory("archive-delta");
-        let main_spec_path = repo_root.join("openspec/specs/capability-a/spec.md");
-        let change_spec_path =
-            repo_root.join("openspec/changes/change-a/specs/capability-a/spec.md");
-        let fake_openspec_path = repo_root.join("mock-bin/openspec");
-
-        write_file(
-            &main_spec_path,
-            "# Capability A\n\n## Requirements\n\n### Requirement: Existing\nThe original behavior.\n",
-        );
-        write_file(
-            &change_spec_path,
-            "# Capability A\n\n## MODIFIED Requirements\n\n### Requirement: Existing\nThe archived behavior.\n",
-        );
-        write_fake_openspec(&fake_openspec_path);
-
-        let prepared = prepare_diff_inputs(
-            change_spec_path.to_str().unwrap(),
-            main_spec_path.to_str().unwrap(),
-            fake_openspec_path.as_os_str(),
-        )
-        .expect("expected archived delta output");
-
-        assert_eq!(
-            fs::read_to_string(prepared.left).unwrap(),
-            "# Capability A\n\n## Requirements\n\n### Requirement: Existing\nThe archived behavior.\n"
-        );
-        assert_eq!(
-            fs::read_to_string(prepared.right).unwrap(),
-            "# Capability A\n\n## Requirements\n\n### Requirement: Existing\nThe original behavior.\n"
-        );
-    }
-
-    fn create_test_directory(prefix: &str) -> PathBuf {
-        super::create_temp_directory(&format!("openspec-diff-core-test-{prefix}")).unwrap()
-    }
-
-    fn write_file(path: &Path, content: &str) {
-        fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(path, content).unwrap();
-    }
-
-    #[cfg(unix)]
-    fn write_fake_openspec(path: &Path) {
-        use std::os::unix::fs::PermissionsExt;
-
-        write_file(
-            path,
-            r##"#!/usr/bin/env python3
-import pathlib
-import sys
-
-repo_root = pathlib.Path.cwd()
-change_name = sys.argv[2]
-change_spec = repo_root / "openspec" / "changes" / change_name / "specs" / "capability-a" / "spec.md"
-output_spec = repo_root / "openspec" / "specs" / "capability-a" / "spec.md"
-output_spec.parent.mkdir(parents=True, exist_ok=True)
-output_spec.write_text("# Capability A\n\n## Requirements\n\n### Requirement: Existing\nThe archived behavior.\n", encoding="utf-8")
-"##,
-        );
-        let mut permissions = fs::metadata(path).unwrap().permissions();
-        permissions.set_mode(0o755);
-        fs::set_permissions(path, permissions).unwrap();
     }
 }

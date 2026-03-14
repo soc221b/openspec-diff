@@ -5,7 +5,7 @@ use std::process;
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 3 {
-        eprintln!("Usage: openspec-diff-core <uri1> <uri2>  # compare two spec file paths");
+        eprintln!("Usage: openspec-difftool <uri1> <uri2>  # compare two spec file paths");
         process::exit(2);
     }
 

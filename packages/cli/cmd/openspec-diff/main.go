@@ -106,10 +106,10 @@ func runCommand(ctx context.Context, dir string, name string, args ...string) er
 func coreDiffCommand() string {
 	executablePath, err := os.Executable()
 	if err != nil {
-		return "openspec-diff-core"
+		return "openspec-difftool"
 	}
 
-	commandName := "openspec-diff-core"
+	commandName := "openspec-difftool"
 	if runtime.GOOS == "windows" {
 		commandName += ".exe"
 	}
