@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 )
 
@@ -18,6 +17,10 @@ const (
 	changesDirectory  = "changes"
 	specsDirectory    = "specs"
 	specFileName      = "spec.md"
+	// This is the count of fixed UI lines outside the changes list that must be
+	// included when moving the cursor back up to redraw the prompt: the question
+	// line, the blank spacer line, and the navigation hint line.
+	promptOverhead = 3
 )
 
 var errNoChanges = errors.New("no active changes found")
@@ -137,37 +140,97 @@ func listChanges(repoRoot string) ([]string, error) {
 }
 
 func selectChange(stdin io.Reader, stdout io.Writer, changes []string) (string, error) {
-	_, _ = fmt.Fprintln(stdout, "? Select a change to diff")
-	for index, change := range changes {
-		prefix := " "
-		if index == 0 {
-			prefix = "❯"
+	reader := bufio.NewReader(stdin)
+	selectedIndex := 0
+	typedSelection := strings.Builder{}
+	rendered := false
+
+	renderPrompt := func() {
+		if rendered {
+			// Move the cursor back to the top of the prompt and clear it before
+			// redrawing with the updated selection marker.
+			_, _ = fmt.Fprintf(stdout, "\x1b[%dA\x1b[J", len(changes)+promptOverhead)
 		}
-		_, _ = fmt.Fprintf(stdout, "%s %s\n", prefix, change)
-	}
-	_, _ = fmt.Fprintln(stdout)
-	_, _ = fmt.Fprintln(stdout, "↑↓ navigate • ⏎ select")
 
-	input, err := bufio.NewReader(stdin).ReadString('\n')
-	if err != nil && !errors.Is(err, io.EOF) {
-		return "", err
+		_, _ = fmt.Fprintln(stdout, "? Select a change to diff")
+		for index, change := range changes {
+			prefix := " "
+			if index == selectedIndex {
+				prefix = "❯"
+			}
+			_, _ = fmt.Fprintf(stdout, "%s %s\n", prefix, change)
+		}
+		_, _ = fmt.Fprintln(stdout)
+		_, _ = fmt.Fprintln(stdout, "↑↓ navigate • ⏎ select")
+		rendered = true
 	}
 
-	selection := strings.TrimSpace(input)
+	renderPrompt()
+
+	for {
+		input, err := reader.ReadByte()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return resolveSelection(stdout, changes, selectedIndex, typedSelection.String(), true)
+			}
+			return "", err
+		}
+
+		switch input {
+		case '\r', '\n':
+			return resolveSelection(stdout, changes, selectedIndex, typedSelection.String(), false)
+		case '\x1b':
+			next, err := reader.ReadByte()
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					return resolveSelection(stdout, changes, selectedIndex, typedSelection.String(), true)
+				}
+				return "", err
+			}
+			if next != '[' {
+				typedSelection.WriteByte(input)
+				typedSelection.WriteByte(next)
+				continue
+			}
+
+			direction, err := reader.ReadByte()
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					return resolveSelection(stdout, changes, selectedIndex, typedSelection.String(), true)
+				}
+				return "", err
+			}
+
+			switch direction {
+			case 'A':
+				if selectedIndex > 0 {
+					selectedIndex--
+				}
+				renderPrompt()
+			case 'B':
+				if selectedIndex < len(changes)-1 {
+					selectedIndex++
+				}
+				renderPrompt()
+			default:
+				typedSelection.WriteByte(input)
+				typedSelection.WriteByte(next)
+				typedSelection.WriteByte(direction)
+			}
+		default:
+			typedSelection.WriteByte(input)
+		}
+	}
+}
+
+func resolveSelection(stdout io.Writer, changes []string, selectedIndex int, rawSelection string, eof bool) (string, error) {
+	selection := strings.TrimSpace(rawSelection)
 	if selection == "" {
-		if errors.Is(err, io.EOF) {
+		if eof {
 			return "", errNoSelection
 		}
-		selected := changes[0]
-		_, _ = fmt.Fprintf(stdout, "✔ Select a change to diff %s\n\n", selected)
-		return selected, nil
-	}
 
-	if index, err := strconv.Atoi(selection); err == nil {
-		if index < 1 || index > len(changes) {
-			return "", fmt.Errorf("selection %d is out of range", index)
-		}
-		selected := changes[index-1]
+		selected := changes[selectedIndex]
 		_, _ = fmt.Fprintf(stdout, "✔ Select a change to diff %s\n\n", selected)
 		return selected, nil
 	}

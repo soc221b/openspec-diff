@@ -1,0 +1,6 @@
+? Select a change to diff
+  change-1
+❯ change-2
+  change-3
+
+↑↓ navigate • ⏎ select

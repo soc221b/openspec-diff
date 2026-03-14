@@ -1,0 +1,3 @@
+openspec-diff
+\033[B # navigate to the second change
+^C # abort, in order to capture the stdout

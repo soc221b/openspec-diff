@@ -1,0 +1,2 @@
+openspec-diff
+^C # abort, in order to capture the stdout
