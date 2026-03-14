@@ -11,19 +11,12 @@ import (
 	"github.com/soc221b/openspec-diff/packages/cli/internal/app"
 )
 
-const helpText = `Diff OpenSpec delta specs against the main specs.
+const helpText = `Usage: openspec-diff [options] [change-name]
 
-Usage:
-  openspec-diff [options] [change]
-
-Description:
-  Shows the active OpenSpec changes, lets you select one to diff, and compares
-  the selected change's delta specs against the main specs. In interactive use,
-  navigate with ↑/↓ and press Enter. You can also provide an exact change name
-  as an argument or pipe one on stdin.
+Show changes between delta specs of a change and the main specs
 
 Options:
-  --help, -h    Show help for openspec-diff.
+  -h, --help       display help for command
 `
 
 func main() {
