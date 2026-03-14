@@ -63,7 +63,7 @@ with open(stdin_path, encoding="utf-8") as handle:
     for raw_line in handle:
         instruction = raw_line.split("#", 1)[0].strip()
         # Allow fixture scripts to include the CLI invocation line for readability.
-        if not instruction or instruction == command_name:
+        if not instruction or os.path.basename(instruction) == command_name:
             continue
 
         if instruction == "^C":
