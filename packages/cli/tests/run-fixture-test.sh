@@ -37,10 +37,17 @@ stdout_path = os.environ["FIXTURE_STDOUT_PATH"]
 stderr_path = os.environ["FIXTURE_STDERR_PATH"]
 command = sys.argv[1:]
 command_name = os.path.basename(command[0])
+STEP_SETTLE_DELAY_SECONDS = 0.05
+INTERRUPT_SETTLE_DELAY_SECONDS = 0.1
 
 
-def decode_instruction(value: str) -> str:
-    return codecs.decode(value, "unicode_escape")
+def decode_instruction(value: str, line_number: int) -> str:
+    try:
+        return codecs.decode(value, "unicode_escape")
+    except UnicodeDecodeError as error:
+        raise SystemExit(
+            f"{stdin_path}:{line_number}: invalid escape sequence in stdin instruction: {error}"
+        ) from error
 
 
 def normalize_output(value: str) -> str:
@@ -60,7 +67,7 @@ process = subprocess.Popen(
 abort_requested = False
 
 with open(stdin_path, encoding="utf-8") as handle:
-    for raw_line in handle:
+    for line_number, raw_line in enumerate(handle, start=1):
         instruction = raw_line.split("#", 1)[0].strip()
         # Allow fixture scripts to include the CLI invocation line for readability.
         if not instruction or os.path.basename(instruction) == command_name:
@@ -68,15 +75,17 @@ with open(stdin_path, encoding="utf-8") as handle:
 
         if instruction == "^C":
             abort_requested = True
-            # Give the CLI a moment to flush the prompt update before interrupting it.
-            time.sleep(0.1)
+            # A short delay gives the CLI time to flush the latest prompt update
+            # before the scripted interrupt stops the process.
+            time.sleep(INTERRUPT_SETTLE_DELAY_SECONDS)
             os.killpg(process.pid, signal.SIGINT)
             break
 
-        process.stdin.write(decode_instruction(instruction))
+        process.stdin.write(decode_instruction(instruction, line_number))
         process.stdin.flush()
-        # Small delay so interactive prompts can react before the next scripted step.
-        time.sleep(0.05)
+        # A short delay lets interactive prompts react before the next scripted
+        # input step advances the fixture.
+        time.sleep(STEP_SETTLE_DELAY_SECONDS)
 
 if not abort_requested:
     process.stdin.close()
