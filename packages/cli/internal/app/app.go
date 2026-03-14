@@ -18,7 +18,8 @@ const (
 	changesDirectory  = "changes"
 	specsDirectory    = "specs"
 	specFileName      = "spec.md"
-	// Add these non-change lines to len(changes) to compute how many lines to clear when redrawing.
+	// Add these prompt lines—"? Select a change to diff", the blank spacer line,
+	// and "↑↓ navigate • ⏎ select"—to len(changes) when redrawing.
 	promptOverhead    = 3
 )
 
