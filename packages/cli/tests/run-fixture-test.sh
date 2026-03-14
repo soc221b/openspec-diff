@@ -36,6 +36,7 @@ stdin_path = os.environ["FIXTURE_STDIN_PATH"]
 stdout_path = os.environ["FIXTURE_STDOUT_PATH"]
 stderr_path = os.environ["FIXTURE_STDERR_PATH"]
 command = sys.argv[1:]
+command_name = os.path.basename(command[0])
 
 
 def decode_instruction(value: str) -> str:
@@ -61,7 +62,7 @@ abort_requested = False
 with open(stdin_path, encoding="utf-8") as handle:
     for raw_line in handle:
         instruction = raw_line.split("#", 1)[0].strip()
-        if not instruction or instruction == "openspec-diff":
+        if not instruction or instruction == command_name:
             continue
 
         if instruction == "^C":

@@ -1,2 +1,2 @@
 openspec-diff # enter interactive mode because there is no change given
-beta-change # select the named change without a trailing newline
+beta-change # select the named change; no explicit \n means stdin closes without a trailing newline
