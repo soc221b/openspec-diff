@@ -66,6 +66,31 @@ def parse_invocation(value: str, line_number: int) -> list[str]:
         ) from error
 
 
+def strip_inline_comment(value: str) -> str:
+    """Drop unquoted trailing # comments without disturbing input escapes."""
+    escaped = False
+    quote = None
+
+    for index, char in enumerate(value):
+        if escaped:
+            escaped = False
+            continue
+        if char == "\\":
+            escaped = True
+            continue
+        if quote:
+            if char == quote:
+                quote = None
+            continue
+        if char in ("'", '"'):
+            quote = char
+            continue
+        if char == "#":
+            return value[:index].rstrip()
+
+    return value.strip()
+
+
 def read_stream_to_buffer(stream, buffer):
     while True:
         chunk = stream.read(1)
@@ -94,7 +119,7 @@ seen_instruction = False
 
 with open(stdin_path, encoding="utf-8") as handle:
     for line_number, raw_line in enumerate(handle, start=1):
-        instruction = raw_line.split("#", 1)[0].strip()
+        instruction = strip_inline_comment(raw_line)
         if not instruction:
             continue
         if not seen_instruction:
@@ -103,7 +128,7 @@ with open(stdin_path, encoding="utf-8") as handle:
                 command.extend(invocation[1:])
                 seen_instruction = True
                 continue
-        seen_instruction = True
+            seen_instruction = True
         instructions.append((line_number, instruction))
 
 
