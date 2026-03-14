@@ -4,12 +4,12 @@
   "description": "Monorepo for the OpenSpec Diff CLI and VSCode extension.",
   "private": true,
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
-    "format": "npm run format --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present"
+    "build": "(cd packages/cli && go build -o ./bin/openspec-diff ./cmd/openspec-diff) && npm run build --workspace @openspec-diff/vscode-extension",
+    "format": "(cd packages/cli && test -z \"$(gofmt -l .)\") && npm run format --workspace @openspec-diff/vscode-extension",
+    "test": "(cd packages/cli && go test ./...) && npm run test --workspace @openspec-diff/vscode-extension"
   },
   "workspaces": [
-    "packages/*"
+    "packages/vscode-extension"
   ],
   "repository": {
     "type": "git",
