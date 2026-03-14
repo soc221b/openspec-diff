@@ -31,6 +31,8 @@ var errNoSpecSelection = errors.New("no spec selected")
 
 type CommandRunner func(ctx context.Context, dir string, name string, args ...string) error
 
+type navigationAction byte
+
 type specPair struct {
 	name       string
 	selector   string
@@ -163,12 +165,9 @@ func selectRequestedChange(stdin io.Reader, stdout io.Writer, changes []string, 
 }
 
 func selectChange(stdin io.Reader, stdout io.Writer, changes []string) (string, error) {
-	reader := bufio.NewReader(stdin)
-	selectedIndex := 0
-	typedSelection := strings.Builder{}
 	rendered := false
 
-	renderPrompt := func() {
+	renderPrompt := func(selectedIndex int) {
 		if rendered {
 			// Move the cursor back to the top of the prompt and clear it before
 			// redrawing with the updated selection marker.
@@ -188,62 +187,15 @@ func selectChange(stdin io.Reader, stdout io.Writer, changes []string) (string, 
 		rendered = true
 	}
 
-	renderPrompt()
-
-	for {
-		input, err := reader.ReadByte()
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				return resolveSelection(stdout, changes, selectedIndex, typedSelection.String(), true)
-			}
-			return "", err
-		}
-
-		switch input {
-		case '\r', '\n':
-			return resolveSelection(stdout, changes, selectedIndex, typedSelection.String(), false)
-		case '\x1b':
-			next, err := reader.ReadByte()
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					return resolveSelection(stdout, changes, selectedIndex, typedSelection.String(), true)
-				}
-				return "", err
-			}
-			if next != '[' {
-				typedSelection.WriteByte(input)
-				typedSelection.WriteByte(next)
-				continue
-			}
-
-			direction, err := reader.ReadByte()
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					return resolveSelection(stdout, changes, selectedIndex, typedSelection.String(), true)
-				}
-				return "", err
-			}
-
-			switch direction {
-			case 'A':
-				if selectedIndex > 0 {
-					selectedIndex--
-				}
-				renderPrompt()
-			case 'B':
-				if selectedIndex < len(changes)-1 {
-					selectedIndex++
-				}
-				renderPrompt()
-			default:
-				typedSelection.WriteByte(input)
-				typedSelection.WriteByte(next)
-				typedSelection.WriteByte(direction)
-			}
-		default:
-			typedSelection.WriteByte(input)
-		}
-	}
+	return runInteractivePrompt(
+		stdin,
+		len(changes),
+		renderPrompt,
+		func(selectedIndex int, rawSelection string, eof bool) (string, error) {
+			return resolveSelection(stdout, changes, selectedIndex, rawSelection, eof)
+		},
+		nil,
+	)
 }
 
 func resolveSelection(stdout io.Writer, changes []string, selectedIndex int, rawSelection string, eof bool) (string, error) {
@@ -303,13 +255,10 @@ func selectSpecs(stdin io.Reader, stdout io.Writer, specs []string) ([]string, e
 		return selectSpecsWithInquire(specs)
 	}
 
-	reader := bufio.NewReader(stdin)
-	selectedIndex := 0
-	typedSelection := strings.Builder{}
 	selected := make([]bool, len(specs))
 	rendered := false
 
-	renderPrompt := func() {
+	renderPrompt := func(selectedIndex int) {
 		if rendered {
 			_, _ = fmt.Fprintf(stdout, "\x1b[%dA\x1b[J", len(specs)+promptOverhead)
 		}
@@ -331,65 +280,117 @@ func selectSpecs(stdin io.Reader, stdout io.Writer, specs []string) ([]string, e
 		rendered = true
 	}
 
-	renderPrompt()
+	return runInteractivePrompt(
+		stdin,
+		len(specs),
+		renderPrompt,
+		func(selectedIndex int, rawSelection string, eof bool) ([]string, error) {
+			return resolveSpecSelections(stdout, specs, selected, rawSelection, eof)
+		},
+		func(input byte, selectedIndex int) (bool, bool) {
+			if input != ' ' {
+				return false, false
+			}
+
+			selected[selectedIndex] = !selected[selectedIndex]
+			return true, true
+		},
+	)
+}
+
+func runInteractivePrompt[T any](
+	stdin io.Reader,
+	optionCount int,
+	renderPrompt func(selectedIndex int),
+	resolve func(selectedIndex int, rawSelection string, eof bool) (T, error),
+	handleInput func(input byte, selectedIndex int) (handled bool, rerender bool),
+) (T, error) {
+	reader := bufio.NewReader(stdin)
+	selectedIndex := 0
+	typedSelection := strings.Builder{}
+	renderPrompt(selectedIndex)
 
 	for {
 		input, err := reader.ReadByte()
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				return resolveSpecSelections(stdout, specs, selected, typedSelection.String(), true)
+				return resolve(selectedIndex, typedSelection.String(), true)
 			}
-			return nil, err
+			var zero T
+			return zero, err
 		}
 
 		switch input {
 		case '\r', '\n':
-			return resolveSpecSelections(stdout, specs, selected, typedSelection.String(), false)
-		case ' ':
-			selected[selectedIndex] = !selected[selectedIndex]
-			renderPrompt()
+			return resolve(selectedIndex, typedSelection.String(), false)
 		case '\x1b':
-			next, err := reader.ReadByte()
+			action, rawInput, err := readNavigationAction(reader)
 			if err != nil {
 				if errors.Is(err, io.EOF) {
-					return resolveSpecSelections(stdout, specs, selected, typedSelection.String(), true)
+					return resolve(selectedIndex, typedSelection.String(), true)
 				}
-				return nil, err
+				var zero T
+				return zero, err
 			}
-			if next != '[' {
-				typedSelection.WriteByte(input)
-				typedSelection.WriteByte(next)
+			if action == 0 {
+				typedSelection.WriteString(rawInput)
 				continue
 			}
 
-			direction, err := reader.ReadByte()
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					return resolveSpecSelections(stdout, specs, selected, typedSelection.String(), true)
-				}
-				return nil, err
-			}
-
-			switch direction {
-			case 'A':
-				if selectedIndex > 0 {
-					selectedIndex--
-				}
-				renderPrompt()
-			case 'B':
-				if selectedIndex < len(specs)-1 {
-					selectedIndex++
-				}
-				renderPrompt()
-			default:
-				typedSelection.WriteByte(input)
-				typedSelection.WriteByte(next)
-				typedSelection.WriteByte(direction)
-			}
+			selectedIndex = navigateSelection(selectedIndex, optionCount, action)
+			renderPrompt(selectedIndex)
 		default:
+			if handleInput != nil {
+				handled, rerender := handleInput(input, selectedIndex)
+				if handled {
+					if rerender {
+						renderPrompt(selectedIndex)
+					}
+					continue
+				}
+			}
 			typedSelection.WriteByte(input)
 		}
 	}
+}
+
+func readNavigationAction(reader *bufio.Reader) (navigationAction, string, error) {
+	next, err := reader.ReadByte()
+	if err != nil {
+		return 0, "", err
+	}
+	if next != '[' {
+		return 0, string([]byte{'\x1b', next}), nil
+	}
+
+	direction, err := reader.ReadByte()
+	if err != nil {
+		return 0, "", err
+	}
+
+	switch direction {
+	case 'A':
+		return navigationAction(direction), "", nil
+	case 'B':
+		return navigationAction(direction), "", nil
+	default:
+		return 0, string([]byte{'\x1b', next, direction}), nil
+	}
+}
+
+func navigateSelection(selectedIndex, optionCount int, action navigationAction) int {
+	switch action {
+	case 'A':
+		if selectedIndex > 0 {
+			return selectedIndex - 1
+		}
+	case 'B':
+		if selectedIndex < optionCount-1 {
+			return selectedIndex + 1
+		}
+	}
+
+	return selectedIndex
 }
 
 func resolveSpecSelections(stdout io.Writer, specs []string, selected []bool, rawSelection string, eof bool) ([]string, error) {
