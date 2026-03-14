@@ -1,0 +1,12 @@
+? Select a change to diff
+❯ alpha-change
+  beta-change
+
+↑↓ navigate • ⏎ select
+✔ Select a change to diff beta-change
+
+Diffing capability-stdin/spec.md
+1c1
+< # main stdin capability
+---
+> # changed stdin capability

@@ -13,9 +13,20 @@ git -C "$TMP_DIR" config diff.tool terminaldiff
 git -C "$TMP_DIR" config difftool.prompt false
 git -C "$TMP_DIR" config difftool.terminaldiff.cmd 'diff "$LOCAL" "$REMOTE"'
 
-printf '\n' | (
+set -- "$CLI_BIN"
+if [ -f "$FIXTURE_DIR/args.txt" ]; then
+	while IFS= read -r arg || [ -n "$arg" ]; do
+		set -- "$@" "$arg"
+	done <"$FIXTURE_DIR/args.txt"
+fi
+
+(
 	cd "$TMP_DIR"
-	"$CLI_BIN"
+	if [ -f "$FIXTURE_DIR/stdin.txt" ]; then
+		cat "$FIXTURE_DIR/stdin.txt" | "$@"
+	else
+		printf '\n' | "$@"
+	fi
 ) >"$TMP_DIR/stdout.txt" 2>"$TMP_DIR/stderr.txt"
 
 diff -u "$FIXTURE_DIR/stdout.txt" "$TMP_DIR/stdout.txt"

@@ -10,11 +10,41 @@ import (
 	"github.com/soc221b/openspec-diff/packages/cli/internal/app"
 )
 
+const helpText = `Diff an OpenSpec change against the main specs.
+
+Usage:
+  openspec-diff [options]
+
+Description:
+  Shows the active OpenSpec changes, lets you select one to diff, and compares
+  that change's specs against the main specs. Press Enter to select the first
+  change, type a 1-based index, use ↑/↓ followed by Enter, or pipe a change
+  name on stdin.
+
+Options:
+  --help, -h    Show help for openspec-diff.
+`
+
 func main() {
+	if hasHelpArg(os.Args[1:]) {
+		_, _ = fmt.Fprint(os.Stdout, helpText)
+		return
+	}
+
 	if err := app.Run(context.Background(), os.Stdin, os.Stdout, ".", runCommand); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func hasHelpArg(args []string) bool {
+	for _, arg := range args {
+		if arg == "--help" || arg == "-h" {
+			return true
+		}
+	}
+
+	return false
 }
 
 func runCommand(ctx context.Context, dir string, name string, args ...string) error {

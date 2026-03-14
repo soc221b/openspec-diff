@@ -1,8 +1,8 @@
 ? Select a change to diff
-❯ new-spec-file
+❯ new-spec
 
 ↑↓ navigate • ⏎ select
-✔ Select a change to diff new-spec-file
+✔ Select a change to diff new-spec
 
 Diffing capability-new/spec.md
 0a1

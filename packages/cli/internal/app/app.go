@@ -153,6 +153,11 @@ func selectChange(stdin io.Reader, stdout io.Writer, changes []string) (string, 
 		return "", err
 	}
 
+	if selected, ok := selectChangeByNavigation(input, changes); ok {
+		_, _ = fmt.Fprintf(stdout, "✔ Select a change to diff %s\n\n", selected)
+		return selected, nil
+	}
+
 	selection := strings.TrimSpace(input)
 	if selection == "" {
 		if errors.Is(err, io.EOF) {
@@ -180,6 +185,42 @@ func selectChange(stdin io.Reader, stdout io.Writer, changes []string) (string, 
 	}
 
 	return "", fmt.Errorf("unknown change %q", selection)
+}
+
+func selectChangeByNavigation(input string, changes []string) (string, bool) {
+	if !strings.Contains(input, "\x1b") {
+		return "", false
+	}
+
+	selectedIndex := 0
+	sawNavigation := false
+
+	for index := 0; index < len(input); {
+		switch {
+		case strings.HasPrefix(input[index:], "\x1b[A"):
+			sawNavigation = true
+			if selectedIndex > 0 {
+				selectedIndex--
+			}
+			index += len("\x1b[A")
+		case strings.HasPrefix(input[index:], "\x1b[B"):
+			sawNavigation = true
+			if selectedIndex < len(changes)-1 {
+				selectedIndex++
+			}
+			index += len("\x1b[B")
+		case input[index] == '\r' || input[index] == '\n':
+			index++
+		default:
+			return "", false
+		}
+	}
+
+	if !sawNavigation {
+		return "", false
+	}
+
+	return changes[selectedIndex], true
 }
 
 func collectSpecPairs(repoRoot, change string) ([]specPair, error) {

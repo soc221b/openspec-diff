@@ -1,0 +1,11 @@
+? Select a change to diff
+❯ single-spec
+
+↑↓ navigate • ⏎ select
+✔ Select a change to diff single-spec
+
+Diffing capability-a/spec.md
+1c1
+< # main capability a
+---
+> # changed capability a
