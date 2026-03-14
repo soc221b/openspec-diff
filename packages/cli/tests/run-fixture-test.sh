@@ -65,8 +65,8 @@ def parse_invocation(value: str, line_number: int) -> list[str]:
         line_number: The 1-based source line number for error reporting.
 
     Returns:
-        The shell-style tokenized CLI invocation from stdin.txt, such as
-        ``openspec-diff --help``.
+        The shell-style token list from stdin.txt, such as
+        ``["openspec-diff", "--help"]``.
     """
     try:
         return shlex.split(value)
@@ -85,7 +85,8 @@ def strip_inline_comment(value: str) -> str:
 
     Returns:
         The line content with only an unquoted trailing comment removed, while
-        preserving quoted or escaped # characters used as real input.
+        preserving quoted or escaped # characters used as real input. Returns
+        an empty string for comment-only lines.
     """
     escaped = False
     quote = None
