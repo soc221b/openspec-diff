@@ -85,8 +85,9 @@ def strip_inline_comment(value: str) -> str:
 
     Returns:
         The line content with only an unquoted trailing comment removed, while
-        preserving quoted or escaped # characters used as real input. Returns
-        an empty string for comment-only lines.
+        preserving quoted or escaped # characters used as real input. When no
+        unquoted comment marker is present, this returns the stripped original
+        line; comment-only lines normalize to an empty string.
     """
     escaped = False
     quote = None
