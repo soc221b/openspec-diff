@@ -1,2 +1,2 @@
 openspec-diff
-beta-change\n # \n submits the named change
+beta-change\n # submit the named change by pressing enter
