@@ -30,6 +30,7 @@ import re
 import signal
 import subprocess
 import sys
+import threading
 import time
 
 stdin_path = os.environ["FIXTURE_STDIN_PATH"]
@@ -37,10 +38,8 @@ stdout_path = os.environ["FIXTURE_STDOUT_PATH"]
 stderr_path = os.environ["FIXTURE_STDERR_PATH"]
 command = sys.argv[1:]
 command_name = os.path.basename(command[0])
-# These short delays are only to let interactive prompt redraws settle between
-# scripted keystrokes and before a scripted Ctrl-C snapshot.
-STEP_SETTLE_DELAY_SECONDS = 0.05
-INTERRUPT_SETTLE_DELAY_SECONDS = 0.1
+OUTPUT_IDLE_TIMEOUT_SECONDS = 0.2
+OUTPUT_POLL_INTERVAL_SECONDS = 0.01
 
 
 def decode_instruction(value: str, line_number: int) -> str:
@@ -59,6 +58,23 @@ def normalize_output(value: str) -> str:
     return re.sub(r"\x1b\[\d+A", "", normalized)
 
 
+def read_stream(stream, buffer):
+    while True:
+        chunk = stream.read(1)
+        if chunk == "":
+            return
+        buffer.append(chunk)
+
+
+def wait_for_new_output(process, buffer, previous_length):
+    """Wait briefly for stdout to grow after scripted input or until exit."""
+    deadline = time.monotonic() + OUTPUT_IDLE_TIMEOUT_SECONDS
+    while time.monotonic() < deadline:
+        if len(buffer) > previous_length or process.poll() is not None:
+            return
+        time.sleep(OUTPUT_POLL_INTERVAL_SECONDS)
+
+
 process = subprocess.Popen(
     command,
     stdin=subprocess.PIPE,
@@ -70,6 +86,12 @@ process = subprocess.Popen(
 
 abort_requested = False
 seen_instruction = False
+stdout_buffer = []
+stderr_buffer = []
+stdout_thread = threading.Thread(target=read_stream, args=(process.stdout, stdout_buffer))
+stderr_thread = threading.Thread(target=read_stream, args=(process.stderr, stderr_buffer))
+stdout_thread.start()
+stderr_thread.start()
 
 with open(stdin_path, encoding="utf-8") as handle:
     for line_number, raw_line in enumerate(handle, start=1):
@@ -85,23 +107,24 @@ with open(stdin_path, encoding="utf-8") as handle:
 
         if instruction == "^C":
             abort_requested = True
-            # A short delay gives the CLI time to flush the latest prompt update
-            # before the scripted interrupt stops the process.
-            time.sleep(INTERRUPT_SETTLE_DELAY_SECONDS)
+            wait_for_new_output(process, stdout_buffer, 0)
             os.killpg(process.pid, signal.SIGINT)
             break
 
+        previous_stdout_length = len(stdout_buffer)
         process.stdin.write(decode_instruction(instruction, line_number))
         process.stdin.flush()
-        # A short delay lets interactive prompts react before the next scripted
-        # input step advances the fixture.
-        time.sleep(STEP_SETTLE_DELAY_SECONDS)
+        wait_for_new_output(process, stdout_buffer, previous_stdout_length)
 
 if not abort_requested:
     process.stdin.close()
     process.stdin = None
 
-stdout, stderr = process.communicate()
+process.wait()
+stdout_thread.join()
+stderr_thread.join()
+stdout = "".join(stdout_buffer)
+stderr = "".join(stderr_buffer)
 
 with open(stdout_path, "w", encoding="utf-8") as handle:
     handle.write(normalize_output(stdout))
@@ -111,6 +134,7 @@ with open(stderr_path, "w", encoding="utf-8") as handle:
 
 # Exit code 1 is acceptable here because git diff uses it to signal
 # "differences found", and fixture tests snapshot that diff output as success.
+# A scripted Ctrl-C snapshot is also expected to terminate with SIGINT.
 if process.returncode not in (0, 1):
     if abort_requested and process.returncode in (-signal.SIGINT, 128 + signal.SIGINT):
         sys.exit(0)
