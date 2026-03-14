@@ -2,7 +2,7 @@
 
 set -eu
 
-FIXTURE_DIR=$1
+FIXTURE_DIR=$(CDPATH= cd -- "$1" && pwd)
 CLI_BIN="$FIXTURE_DIR/../../bin/openspec-diff"
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT
@@ -20,7 +20,7 @@ fi
 
 (
 	cd "$TMP_DIR"
-	FIXTURE_STDIN_PATH="$FIXTURE_DIR/stdin.txt" FIXTURE_STDOUT_PATH="$TMP_DIR/stdout.txt" FIXTURE_STDERR_PATH="$TMP_DIR/stderr.txt" python - <<'PY' "$CLI_BIN"
+	FIXTURE_STDIN_PATH="$FIXTURE_DIR/stdin.txt" FIXTURE_STDOUT_PATH="$TMP_DIR/stdout.txt" python - <<'PY' "$CLI_BIN"
 import codecs
 import os
 import re
@@ -33,7 +33,6 @@ import time
 
 stdin_path = os.environ["FIXTURE_STDIN_PATH"]
 stdout_path = os.environ["FIXTURE_STDOUT_PATH"]
-stderr_path = os.environ["FIXTURE_STDERR_PATH"]
 cli_bin = sys.argv[1]
 command_name = os.path.basename(cli_bin)
 OUTPUT_IDLE_TIMEOUT_SECONDS = 0.2
@@ -220,11 +219,12 @@ stderr = "".join(stderr_buffer)
 with open(stdout_path, "w", encoding="utf-8") as handle:
     handle.write(normalize_output(stdout))
 
-with open(stderr_path, "w", encoding="utf-8") as handle:
-    handle.write(stderr)
-
 if error_message is not None:
     print(error_message, file=sys.stderr)
+    sys.exit(1)
+
+if stderr:
+    print(stderr, end="", file=sys.stderr)
     sys.exit(1)
 
 # Exit code 1 is acceptable here because git diff uses it to signal
@@ -238,4 +238,3 @@ PY
 )
 
 diff -u "$FIXTURE_DIR/stdout.txt" "$TMP_DIR/stdout.txt"
-diff -u "$FIXTURE_DIR/stderr.txt" "$TMP_DIR/stderr.txt"
