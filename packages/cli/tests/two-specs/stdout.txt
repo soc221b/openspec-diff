@@ -1,7 +1,7 @@
 ? Select a change to diff
 ❯ two-specs
 
-↑↓ navigate • ⏎ select • type a 1-based index or exact change name
+↑↓ navigate • ⏎ select
 ✔ Select a change to diff two-specs
 
 Diffing capability-a/spec.md

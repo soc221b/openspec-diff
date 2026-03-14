@@ -17,9 +17,9 @@ Usage:
 
 Description:
   Shows the active OpenSpec changes, lets you select one to diff, and compares
-  the selected change's delta specs against the main specs. Press Enter to
-  select the first change, type a 1-based index, use ↑/↓ followed by Enter, or
-  pipe a change name on stdin.
+  the selected change's delta specs against the main specs. In interactive use,
+  navigate with ↑/↓ and press Enter. You can also pipe an exact change name on
+  stdin.
 
 Options:
   --help, -h    Show help for openspec-diff.

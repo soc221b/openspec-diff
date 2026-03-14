@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 )
 
@@ -162,7 +161,7 @@ func selectChange(stdin io.Reader, stdout io.Writer, changes []string) (string, 
 			_, _ = fmt.Fprintf(stdout, "%s %s\n", prefix, change)
 		}
 		_, _ = fmt.Fprintln(stdout)
-		_, _ = fmt.Fprintln(stdout, "↑↓ navigate • ⏎ select • type a 1-based index or exact change name")
+		_, _ = fmt.Fprintln(stdout, "↑↓ navigate • ⏎ select")
 		rendered = true
 	}
 
@@ -232,15 +231,6 @@ func resolveSelection(stdout io.Writer, changes []string, selectedIndex int, raw
 		}
 
 		selected := changes[selectedIndex]
-		_, _ = fmt.Fprintf(stdout, "✔ Select a change to diff %s\n\n", selected)
-		return selected, nil
-	}
-
-	if index, err := strconv.Atoi(selection); err == nil {
-		if index < 1 || index > len(changes) {
-			return "", fmt.Errorf("selection %d is out of range", index)
-		}
-		selected := changes[index-1]
 		_, _ = fmt.Fprintf(stdout, "✔ Select a change to diff %s\n\n", selected)
 		return selected, nil
 	}
