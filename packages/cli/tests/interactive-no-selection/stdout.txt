@@ -1,0 +1,4 @@
+? Select a change to diff
+❯ interactive-no-selection
+
+↑↓ navigate • ⏎ select

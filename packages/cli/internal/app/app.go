@@ -21,6 +21,7 @@ const (
 )
 
 var errNoChanges = errors.New("no active changes found")
+var errNoSelection = errors.New("no change selected")
 
 type CommandRunner func(ctx context.Context, dir string, name string, args ...string) error
 
@@ -48,6 +49,10 @@ func Run(ctx context.Context, stdin io.Reader, stdout io.Writer, workDir string,
 
 	selectedChange, err := selectChange(stdin, stdout, changes)
 	if err != nil {
+		if errors.Is(err, errNoSelection) {
+			_, _ = fmt.Fprintln(stdout, "No change selected. Aborting.")
+			return nil
+		}
 		return err
 	}
 
@@ -134,9 +139,14 @@ func listChanges(repoRoot string) ([]string, error) {
 func selectChange(stdin io.Reader, stdout io.Writer, changes []string) (string, error) {
 	_, _ = fmt.Fprintln(stdout, "? Select a change to diff")
 	for index, change := range changes {
-		_, _ = fmt.Fprintf(stdout, "%d. %s\n", index+1, change)
+		prefix := " "
+		if index == 0 {
+			prefix = "❯"
+		}
+		_, _ = fmt.Fprintf(stdout, "%s %s\n", prefix, change)
 	}
-	_, _ = fmt.Fprint(stdout, "> ")
+	_, _ = fmt.Fprintln(stdout)
+	_, _ = fmt.Fprintln(stdout, "↑↓ navigate • ⏎ select")
 
 	input, err := bufio.NewReader(stdin).ReadString('\n')
 	if err != nil && !errors.Is(err, io.EOF) {
@@ -145,20 +155,26 @@ func selectChange(stdin io.Reader, stdout io.Writer, changes []string) (string, 
 
 	selection := strings.TrimSpace(input)
 	if selection == "" {
-		return "", errors.New("a change selection is required")
+		if errors.Is(err, io.EOF) {
+			return "", errNoSelection
+		}
+		selected := changes[0]
+		_, _ = fmt.Fprintf(stdout, "✔ Select a change to diff %s\n\n", selected)
+		return selected, nil
 	}
 
 	if index, err := strconv.Atoi(selection); err == nil {
 		if index < 1 || index > len(changes) {
 			return "", fmt.Errorf("selection %d is out of range", index)
 		}
-		_, _ = fmt.Fprintln(stdout)
-		return changes[index-1], nil
+		selected := changes[index-1]
+		_, _ = fmt.Fprintf(stdout, "✔ Select a change to diff %s\n\n", selected)
+		return selected, nil
 	}
 
 	for _, change := range changes {
 		if change == selection {
-			_, _ = fmt.Fprintln(stdout)
+			_, _ = fmt.Fprintf(stdout, "✔ Select a change to diff %s\n\n", change)
 			return change, nil
 		}
 	}

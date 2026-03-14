@@ -13,7 +13,7 @@ git -C "$TMP_DIR" config diff.tool terminaldiff
 git -C "$TMP_DIR" config difftool.prompt false
 git -C "$TMP_DIR" config difftool.terminaldiff.cmd 'diff "$LOCAL" "$REMOTE"'
 
-printf '1\n' | (
+printf '\n' | (
 	cd "$TMP_DIR"
 	"$CLI_BIN"
 ) >"$TMP_DIR/stdout.txt" 2>"$TMP_DIR/stderr.txt"
