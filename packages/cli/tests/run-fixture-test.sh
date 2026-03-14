@@ -124,7 +124,7 @@ def wait_for_output_to_settle(process, buffer):
     previous_length = len(buffer)
     idle_deadline = time.monotonic() + OUTPUT_IDLE_TIMEOUT_SECONDS
     overall_deadline = time.monotonic() + MAX_OUTPUT_SETTLE_SECONDS
-    exited = False
+    exit_deadline = None
     while time.monotonic() < overall_deadline:
         current_length = len(buffer)
         if current_length != previous_length:
@@ -136,10 +136,9 @@ def wait_for_output_to_settle(process, buffer):
                 return
             time.sleep(OUTPUT_POLL_INTERVAL_SECONDS)
             continue
-        if not exited:
-            exited = True
-            idle_deadline = min(now + OUTPUT_IDLE_TIMEOUT_SECONDS, overall_deadline)
-        if now >= idle_deadline:
+        if exit_deadline is None:
+            exit_deadline = min(now + OUTPUT_IDLE_TIMEOUT_SECONDS, overall_deadline)
+        if now >= exit_deadline:
             return
         time.sleep(OUTPUT_POLL_INTERVAL_SECONDS)
 
