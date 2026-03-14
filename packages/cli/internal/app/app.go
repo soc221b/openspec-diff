@@ -31,6 +31,7 @@ var errNoSpecSelection = errors.New("no spec selected")
 
 type CommandRunner func(ctx context.Context, dir string, name string, args ...string) error
 
+// navigationAction represents an ANSI arrow-key direction code.
 type navigationAction byte
 
 type specPair struct {
@@ -354,6 +355,9 @@ func runInteractivePrompt[T any](
 	}
 }
 
+// readNavigationAction parses an ANSI escape sequence and returns the matching
+// arrow-key action, or the raw bytes when the sequence should be treated as
+// typed input instead.
 func readNavigationAction(reader *bufio.Reader) (navigationAction, string, error) {
 	next, err := reader.ReadByte()
 	if err != nil {
@@ -378,6 +382,8 @@ func readNavigationAction(reader *bufio.Reader) (navigationAction, string, error
 	}
 }
 
+// navigateSelection applies an arrow-key action while keeping the selection
+// index within the available option range.
 func navigateSelection(selectedIndex, optionCount int, action navigationAction) int {
 	switch action {
 	case 'A':
