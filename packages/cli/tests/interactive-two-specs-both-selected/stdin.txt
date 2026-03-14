@@ -1,5 +1,5 @@
 openspec-diff
-\n # submit the default selected change
+\n # submit the selected change to proceed to spec selection
 \x20 # select the first spec
 \033[B # navigate to the second spec
 \x20 # select the second spec
