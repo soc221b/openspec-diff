@@ -65,13 +65,19 @@ process = subprocess.Popen(
 )
 
 abort_requested = False
+seen_instruction = False
 
 with open(stdin_path, encoding="utf-8") as handle:
     for line_number, raw_line in enumerate(handle, start=1):
         instruction = raw_line.split("#", 1)[0].strip()
-        # Allow fixture scripts to include the CLI invocation line for readability.
-        if not instruction or os.path.basename(instruction) == command_name:
+        if not instruction:
             continue
+        # Allow fixture scripts to start with the CLI invocation line for
+        # readability without stealing later stdin that happens to match it.
+        if not seen_instruction and os.path.basename(instruction) == command_name:
+            seen_instruction = True
+            continue
+        seen_instruction = True
 
         if instruction == "^C":
             abort_requested = True
@@ -99,6 +105,8 @@ with open(stdout_path, "w", encoding="utf-8") as handle:
 with open(stderr_path, "w", encoding="utf-8") as handle:
     handle.write(stderr)
 
+# Exit code 1 is acceptable here because git diff uses it to signal
+# "differences found", and fixture tests snapshot that diff output as success.
 if process.returncode not in (0, 1):
     if abort_requested and process.returncode in (-signal.SIGINT, 128 + signal.SIGINT):
         sys.exit(0)
