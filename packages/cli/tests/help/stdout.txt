@@ -4,3 +4,4 @@ Show changes between delta specs of a change and the main specs
 
 Options:
   -h, --help       display help for command
+  --specs          diff all specs without prompting
