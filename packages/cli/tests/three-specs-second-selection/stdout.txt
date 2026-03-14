@@ -1,0 +1,14 @@
+? Select a spec to diff
+  all
+  capability-a
+❯ capability-b
+  capability-c
+
+↑↓ navigate • ⏎ select
+✔ Select a spec to diff capability-b
+
+Diffing capability-b/spec.md
+1c1
+< # main capability b
+---
+> # changed capability b

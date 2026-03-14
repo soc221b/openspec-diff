@@ -1,0 +1,4 @@
+openspec-diff three-specs
+\033[B # navigate to the first spec
+\033[B # navigate to the second spec
+\n # select the second spec
