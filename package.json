@@ -1,0 +1,23 @@
+{
+  "name": "openspec-diff",
+  "version": "1.0.0",
+  "description": "Monorepo for the OpenSpec Diff CLI and VSCode extension.",
+  "private": true,
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "format": "npm run format --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/soc221b/openspec-diff.git"
+  },
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/soc221b/openspec-diff/issues"
+  },
+  "homepage": "https://github.com/soc221b/openspec-diff#readme"
+}
