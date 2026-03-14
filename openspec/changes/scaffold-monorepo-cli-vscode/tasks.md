@@ -1,0 +1,7 @@
+- [ ] Scaffold the root monorepo configuration, shared TypeScript settings, and workspace scripts for `core`, `cli`, and `vscode` packages.
+- [ ] Implement the `core` package APIs for discovering OpenSpec changes, loading spec files, and producing structured diff results.
+- [ ] Implement the CLI package so it can select a change interactively and render the diff using `core`.
+- [ ] Confirm which prompt package OpenSpec uses and either reuse that public dependency or add a small public-package-based selector abstraction in the CLI.
+- [ ] Implement the VS Code extension command and editor title toggle so it appears for spec files in `openspec/changes/<change>/` and shows the diff using `core`.
+- [ ] Add targeted tests for the core diff logic and any package-specific behavior that already has test infrastructure.
+- [ ] Document local development and verification steps for the new monorepo packages.
