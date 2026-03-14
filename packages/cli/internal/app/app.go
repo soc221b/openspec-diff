@@ -18,8 +18,9 @@ const (
 	changesDirectory  = "changes"
 	specsDirectory    = "specs"
 	specFileName      = "spec.md"
-	// Add these prompt lines—"? Select a change to diff", the blank spacer line,
-	// and "↑↓ navigate • ⏎ select"—to len(changes) when redrawing.
+	// This is the count of fixed UI lines outside the changes list that must be
+	// included when moving the cursor back up to redraw the prompt: the question
+	// line, the blank spacer line, and the navigation hint line.
 	promptOverhead    = 3
 )
 
@@ -147,6 +148,8 @@ func selectChange(stdin io.Reader, stdout io.Writer, changes []string) (string, 
 
 	renderPrompt := func() {
 		if rendered {
+			// Move the cursor back to the top of the prompt and clear it before
+			// redrawing with the updated selection marker.
 			_, _ = fmt.Fprintf(stdout, "\x1b[%dA\x1b[J", len(changes)+promptOverhead)
 		}
 
