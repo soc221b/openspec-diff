@@ -34,7 +34,7 @@ type specPair struct {
 	mainPath   string
 }
 
-func Run(ctx context.Context, stdin io.Reader, stdout io.Writer, workDir string, run CommandRunner) error {
+func Run(ctx context.Context, stdin io.Reader, stdout io.Writer, workDir string, changeName string, run CommandRunner) error {
 	repoRoot, err := findRepoRoot(workDir)
 	if err != nil {
 		return err
@@ -50,7 +50,7 @@ func Run(ctx context.Context, stdin io.Reader, stdout io.Writer, workDir string,
 		return err
 	}
 
-	selectedChange, err := selectChange(stdin, stdout, changes)
+	selectedChange, err := selectRequestedChange(stdin, stdout, changes, changeName)
 	if err != nil {
 		if errors.Is(err, errNoSelection) {
 			_, _ = fmt.Fprintln(stdout, "No change selected. Aborting.")
@@ -137,6 +137,14 @@ func listChanges(repoRoot string) ([]string, error) {
 	}
 
 	return changes, nil
+}
+
+func selectRequestedChange(stdin io.Reader, stdout io.Writer, changes []string, changeName string) (string, error) {
+	if strings.TrimSpace(changeName) != "" {
+		return resolveExactChange(changes, changeName)
+	}
+
+	return selectChange(stdin, stdout, changes)
 }
 
 func selectChange(stdin io.Reader, stdout io.Writer, changes []string) (string, error) {
@@ -235,14 +243,24 @@ func resolveSelection(stdout io.Writer, changes []string, selectedIndex int, raw
 		return selected, nil
 	}
 
+	change, err := resolveExactChange(changes, selection)
+	if err != nil {
+		return "", err
+	}
+
+	_, _ = fmt.Fprintf(stdout, "✔ Select a change to diff %s\n\n", change)
+	return change, nil
+}
+
+func resolveExactChange(changes []string, rawSelection string) (string, error) {
+	selection := strings.TrimSpace(rawSelection)
 	for _, change := range changes {
 		if change == selection {
-			_, _ = fmt.Fprintf(stdout, "✔ Select a change to diff %s\n\n", change)
 			return change, nil
 		}
 	}
 
-	return "", fmt.Errorf("unknown change %q", selection)
+	return "", fmt.Errorf("Change '%s' not found.", selection)
 }
 
 func collectSpecPairs(repoRoot, change string) ([]specPair, error) {
