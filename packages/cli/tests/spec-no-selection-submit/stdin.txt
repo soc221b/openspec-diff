@@ -1,0 +1,2 @@
+openspec-diff two-specs
+\n # submit with no specs selected

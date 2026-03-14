@@ -1,2 +1,2 @@
 openspec-diff two-specs
-\n # select all specs
+^C # abort, in order to capture the default prompt

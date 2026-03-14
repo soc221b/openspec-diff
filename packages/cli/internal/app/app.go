@@ -75,10 +75,12 @@ func Run(ctx context.Context, stdin io.Reader, stdout io.Writer, workDir string,
 	selectedSpecPairs, err := selectRequestedSpec(stdin, stdout, specPairs, specName)
 	if err != nil {
 		if errors.Is(err, errNoSpecSelection) {
-			_, _ = fmt.Fprintln(stdout, "No spec selected. Aborting.")
 			return nil
 		}
 		return err
+	}
+	if len(selectedSpecPairs) == 0 {
+		return nil
 	}
 
 	for _, pair := range selectedSpecPairs {
@@ -305,9 +307,6 @@ func selectSpecs(stdin io.Reader, stdout io.Writer, specs []string) ([]string, e
 	selectedIndex := 0
 	typedSelection := strings.Builder{}
 	selected := make([]bool, len(specs))
-	for index := range selected {
-		selected[index] = true
-	}
 	rendered := false
 
 	renderPrompt := func() {
@@ -396,13 +395,9 @@ func selectSpecs(stdin io.Reader, stdout io.Writer, specs []string) ([]string, e
 func resolveSpecSelections(stdout io.Writer, specs []string, selected []bool, rawSelection string, eof bool) ([]string, error) {
 	selection := parseSpecSelections(rawSelection)
 	if len(selection) == 0 {
-		if eof {
-			return nil, errNoSpecSelection
-		}
-
 		selectedSpecs := selectedSpecNames(specs, selected)
 		if len(selectedSpecs) == 0 {
-			return nil, errNoSpecSelection
+			return nil, nil
 		}
 		_, _ = fmt.Fprintf(stdout, "✔ Select specs to diff %s\n\n", strings.Join(selectedSpecs, ", "))
 		return selectedSpecs, nil
@@ -520,9 +515,6 @@ func specSelectorName(relativePath string) string {
 
 func selectSpecsWithInquire(specs []string) ([]string, error) {
 	selected := make([]bool, len(specs))
-	for index := range selected {
-		selected[index] = true
-	}
 
 	query := inquire.Query().Select("Select specs to diff", nil)
 	for index, spec := range specs {
@@ -532,7 +524,7 @@ func selectSpecsWithInquire(specs []string) ([]string, error) {
 
 	selectedSpecs := selectedSpecNames(specs, selected)
 	if len(selectedSpecs) == 0 {
-		return nil, errNoSpecSelection
+		return nil, nil
 	}
 
 	return selectedSpecs, nil

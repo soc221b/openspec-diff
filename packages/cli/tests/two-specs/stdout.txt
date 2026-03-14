@@ -1,12 +1,6 @@
-? Select a change to diff
-❯ two-specs
-
-↑↓ navigate • ⏎ select
-✔ Select a change to diff two-specs
-
 ? Select specs to diff
-❯ ◉ capability-a
-  ◉ capability-b
+  ◉ capability-a
+❯ ◉ capability-b
 
 ↑↓ navigate • space toggle • ⏎ submit
 ✔ Select specs to diff capability-a, capability-b

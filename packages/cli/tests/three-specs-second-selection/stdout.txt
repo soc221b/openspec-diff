@@ -1,7 +1,7 @@
 ? Select specs to diff
   ◉ capability-a
-  ◉ capability-b
-❯ ◯ capability-c
+❯ ◉ capability-b
+  ◯ capability-c
 
 ↑↓ navigate • space toggle • ⏎ submit
 ✔ Select specs to diff capability-a, capability-b
