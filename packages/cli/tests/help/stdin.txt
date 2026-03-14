@@ -1,1 +1,1 @@
-openspec-diff --help # show CLI help
+openspec-diff --help

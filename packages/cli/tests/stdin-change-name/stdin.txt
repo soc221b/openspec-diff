@@ -1,2 +1,2 @@
-openspec-diff # enter interactive mode because there is no change given
-beta-change\n # select the named change explicitly
+openspec-diff
+beta-change\n # \n submits the named change

@@ -1,1 +1,1 @@
-openspec-diff # exits immediately because there are no active changes
+openspec-diff

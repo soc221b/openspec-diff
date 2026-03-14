@@ -1,2 +1,2 @@
-openspec-diff # enter interactive mode because there is no change given
+openspec-diff
 ^C # abort, in order to capture the stdout
