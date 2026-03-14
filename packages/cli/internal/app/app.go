@@ -19,6 +19,7 @@ const (
 	changesDirectory  = "changes"
 	specsDirectory    = "specs"
 	specFileName      = "spec.md"
+	escapeChar        = '\x1b'
 	// This is the count of fixed UI lines outside the changes list that must be
 	// included when moving the cursor back up to redraw the prompt: the question
 	// line, the blank spacer line, and the navigation hint line.
@@ -324,7 +325,7 @@ func runInteractivePrompt[T any](
 		switch input {
 		case '\r', '\n':
 			return resolve(selectedIndex, typedSelection.String(), false)
-		case '\x1b':
+		case escapeChar:
 			action, rawInput, err := readNavigationAction(reader)
 			if err != nil {
 				if errors.Is(err, io.EOF) {
@@ -364,7 +365,7 @@ func readNavigationAction(reader *bufio.Reader) (navigationAction, string, error
 		return 0, "", err
 	}
 	if next != '[' {
-		return 0, string([]byte{'\x1b', next}), nil
+		return 0, string([]byte{escapeChar, next}), nil
 	}
 
 	direction, err := reader.ReadByte()
@@ -378,7 +379,7 @@ func readNavigationAction(reader *bufio.Reader) (navigationAction, string, error
 	case 'B':
 		return navigationAction(direction), "", nil
 	default:
-		return 0, string([]byte{'\x1b', next, direction}), nil
+		return 0, string([]byte{escapeChar, next, direction}), nil
 	}
 }
 
