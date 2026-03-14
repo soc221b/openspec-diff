@@ -38,7 +38,7 @@ type specPair struct {
 	mainPath   string
 }
 
-func Run(ctx context.Context, stdin io.Reader, stdout io.Writer, workDir string, changeName string, specName string, diffCommand string, run CommandRunner) error {
+func Run(ctx context.Context, stdin io.Reader, stdout io.Writer, workDir string, changeName string, specName string, coreDiffExecutable string, run CommandRunner) error {
 	repoRoot, err := findRepoRoot(workDir)
 	if err != nil {
 		return err
@@ -85,7 +85,7 @@ func Run(ctx context.Context, stdin io.Reader, stdout io.Writer, workDir string,
 
 	for _, pair := range selectedSpecPairs {
 		_, _ = fmt.Fprintf(stdout, "Diffing %s\n", pair.name)
-		if err := run(ctx, repoRoot, diffCommand, pair.mainPath, pair.changePath); err != nil {
+		if err := run(ctx, repoRoot, coreDiffExecutable, pair.mainPath, pair.changePath); err != nil {
 			return err
 		}
 	}

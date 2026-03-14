@@ -9,6 +9,9 @@ const OPENSPEC_DIRECTORY: &str = "openspec";
 const CHANGES_DIRECTORY: &str = "changes";
 const SPECS_DIRECTORY: &str = "specs";
 const SPEC_FILE_NAME: &str = "spec.md";
+const TEMP_PROPOSAL_CONTENT: &str = "# Temporary diff change\n";
+const TEMP_TASKS_CONTENT: &str = "## Tasks\n- [x] Prepare a synthesized spec for diffing\n";
+/// Markers used to detect OpenSpec delta specs that must be archived before diffing.
 const DELTA_MARKERS: [&str; 4] = [
     "## ADDED Requirements",
     "## MODIFIED Requirements",
@@ -198,17 +201,13 @@ fn copy_file(source: &Path, target: &Path) -> Result<(), String> {
 fn write_minimal_change_files(change_root: &Path) -> Result<(), String> {
     fs::create_dir_all(change_root)
         .map_err(|error| format!("failed to create {}: {error}", change_root.display()))?;
-    fs::write(change_root.join("proposal.md"), "# Temporary diff change\n").map_err(|error| {
+    fs::write(change_root.join("proposal.md"), TEMP_PROPOSAL_CONTENT).map_err(|error| {
         format!(
             "failed to write {}: {error}",
             change_root.join("proposal.md").display()
         )
     })?;
-    fs::write(
-        change_root.join("tasks.md"),
-        "## Tasks\n- [x] Prepare a synthesized spec for diffing\n",
-    )
-    .map_err(|error| {
+    fs::write(change_root.join("tasks.md"), TEMP_TASKS_CONTENT).map_err(|error| {
         format!(
             "failed to write {}: {error}",
             change_root.join("tasks.md").display()
