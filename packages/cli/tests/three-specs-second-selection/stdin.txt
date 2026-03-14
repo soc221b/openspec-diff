@@ -1,6 +1,5 @@
-openspec-diff
-\n # select the first change
+openspec-diff three-specs
 \x20 # select the first spec
 \033[B # navigate to the second spec
 \x20 # select the second spec
-\n # submit the selected specs
+\n # submit the remaining two specs

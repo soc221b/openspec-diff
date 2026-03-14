@@ -1,0 +1,1 @@
+openspec-diff three-specs capability-a,capability-c

@@ -1,0 +1,2 @@
+openspec-diff two-specs
+^C # abort, in order to capture the default prompt

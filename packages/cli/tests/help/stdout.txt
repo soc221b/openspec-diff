@@ -1,6 +1,7 @@
-Usage: openspec-diff [options] [change-name]
+Usage: openspec-diff [options] [change-name] [spec-name[,spec-name...]]
 
 Show changes between delta specs of a change and the main specs
 
 Options:
   -h, --help       display help for command
+  --specs          diff all specs without prompting

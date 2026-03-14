@@ -1,0 +1,5 @@
+? Select specs to diff
+❯ ◯ capability-a
+  ◯ capability-b
+
+↑↓ navigate • space toggle • ⏎ submit
