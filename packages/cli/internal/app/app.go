@@ -260,7 +260,7 @@ func resolveExactChange(changes []string, rawSelection string) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("unknown change %q", selection)
+	return "", fmt.Errorf("Change %q not found in openspec/changes/", selection)
 }
 
 func collectSpecPairs(repoRoot, change string) ([]specPair, error) {

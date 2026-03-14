@@ -1,1 +1,1 @@
-unknown change "missing-change"
+Change "missing-change" not found in openspec/changes/
