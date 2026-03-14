@@ -374,9 +374,7 @@ func readNavigationAction(reader *bufio.Reader) (navigationAction, string, error
 	}
 
 	switch direction {
-	case 'A':
-		return navigationAction(direction), "", nil
-	case 'B':
+	case 'A', 'B':
 		return navigationAction(direction), "", nil
 	default:
 		return 0, string([]byte{escapeChar, next, direction}), nil
