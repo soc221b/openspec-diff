@@ -92,7 +92,7 @@ func findRepoRoot(startDir string) (string, error) {
 
 		parentDir := filepath.Dir(currentDir)
 		if parentDir == currentDir {
-			return "", errors.New("could not find an openspec repository from the current directory")
+			return "", errors.New("could not find openspec/changes and openspec/specs directories in the current path or any parent directory")
 		}
 		currentDir = parentDir
 	}
@@ -118,7 +118,7 @@ func listChanges(repoRoot string) ([]string, error) {
 
 	sort.Strings(changes)
 	if len(changes) == 0 {
-		return nil, errors.New("no changes found in openspec/changes")
+		return nil, errors.New("no changes found in openspec/changes (excluding archive and hidden directories)")
 	}
 
 	return changes, nil

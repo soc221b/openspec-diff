@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestRunGivenRepoWhenSelectingChangeThenUsesGitDifftoolForEachDeltaSpec(t *testing.T) {
+func TestRunSelectsChangeAndInvokesGitDifftool(t *testing.T) {
 	t.Parallel()
 
 	repoRoot := t.TempDir()
@@ -54,7 +54,7 @@ func TestRunGivenRepoWhenSelectingChangeThenUsesGitDifftoolForEachDeltaSpec(t *t
 	}
 }
 
-func TestCollectSpecPairsIncludesNewSpecsWithoutMainFile(t *testing.T) {
+func TestCollectSpecPairsWithMissingMainSpec(t *testing.T) {
 	t.Parallel()
 
 	repoRoot := t.TempDir()
