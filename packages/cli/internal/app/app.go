@@ -18,6 +18,7 @@ const (
 	changesDirectory  = "changes"
 	specsDirectory    = "specs"
 	specFileName      = "spec.md"
+	promptOverhead    = 3
 )
 
 var errNoChanges = errors.New("no active changes found")
@@ -144,7 +145,7 @@ func selectChange(stdin io.Reader, stdout io.Writer, changes []string) (string, 
 
 	renderPrompt := func() {
 		if rendered {
-			_, _ = fmt.Fprintf(stdout, "\x1b[%dA\x1b[J", len(changes)+3)
+			_, _ = fmt.Fprintf(stdout, "\x1b[%dA\x1b[J", len(changes)+promptOverhead)
 		}
 
 		_, _ = fmt.Fprintln(stdout, "? Select a change to diff")

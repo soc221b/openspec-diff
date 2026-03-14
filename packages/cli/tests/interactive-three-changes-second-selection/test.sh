@@ -5,6 +5,8 @@ set -eu
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 CLI_BIN="$SCRIPT_DIR/../../bin/openspec-diff"
 TMP_DIR=$(mktemp -d)
+CAPTURE_TIMEOUT_SECONDS=1
+HOLD_STDIN_OPEN_SECONDS=2
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 cp -R "$SCRIPT_DIR/openspec" "$TMP_DIR/openspec"
@@ -15,7 +17,7 @@ git -C "$TMP_DIR" config difftool.terminaldiff.cmd 'diff "$LOCAL" "$REMOTE"'
 
 (
 	cd "$TMP_DIR"
-	timeout 1 sh -c '{ printf "\033[B"; sleep 30; } | "$1"' sh "$CLI_BIN"
+	timeout "$CAPTURE_TIMEOUT_SECONDS" sh -c '{ printf "\033[B"; sleep "$2"; } | "$1"' sh "$CLI_BIN" "$HOLD_STDIN_OPEN_SECONDS"
 ) >"$TMP_DIR/raw-stdout.txt" 2>"$TMP_DIR/stderr.txt" || true
 
 python - <<'PY' "$TMP_DIR/raw-stdout.txt" "$TMP_DIR/stdout.txt"
