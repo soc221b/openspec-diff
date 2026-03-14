@@ -224,7 +224,8 @@ with open(stderr_path, "w", encoding="utf-8") as handle:
     handle.write(stderr)
 
 if error_message is not None:
-    sys.exit(error_message)
+    print(error_message, file=sys.stderr)
+    sys.exit(1)
 
 # Exit code 1 is acceptable here because git diff uses it to signal
 # "differences found", and fixture tests snapshot that diff output as success.
