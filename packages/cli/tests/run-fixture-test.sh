@@ -124,13 +124,22 @@ def wait_for_output_to_settle(process, buffer):
     previous_length = len(buffer)
     idle_deadline = time.monotonic() + OUTPUT_IDLE_TIMEOUT_SECONDS
     overall_deadline = time.monotonic() + MAX_OUTPUT_SETTLE_SECONDS
-    while process.poll() is None:
+    exited = False
+    while time.monotonic() < overall_deadline:
         current_length = len(buffer)
         if current_length != previous_length:
             previous_length = current_length
             idle_deadline = time.monotonic() + OUTPUT_IDLE_TIMEOUT_SECONDS
         now = time.monotonic()
-        if now >= idle_deadline or now >= overall_deadline:
+        if process.poll() is None:
+            if now >= idle_deadline:
+                return
+            time.sleep(OUTPUT_POLL_INTERVAL_SECONDS)
+            continue
+        if not exited:
+            exited = True
+            idle_deadline = min(now + OUTPUT_IDLE_TIMEOUT_SECONDS, overall_deadline)
+        if now >= idle_deadline:
             return
         time.sleep(OUTPUT_POLL_INTERVAL_SECONDS)
 
@@ -146,11 +155,10 @@ with open(stdin_path, encoding="utf-8") as handle:
             continue
         if not seen_instruction:
             invocation = parse_invocation(instruction, line_number)
+            seen_instruction = True
             if invocation and os.path.basename(invocation[0]) == command_name:
                 command.extend(invocation[1:])
-                seen_instruction = True
                 continue
-            seen_instruction = True
         instructions.append((line_number, instruction))
 
 
