@@ -1,4 +1,7 @@
-# Capability A
+# capability-a Specification
+
+## Purpose
+This specification covers capability-a.
 
 ## Requirements
 

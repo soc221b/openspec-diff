@@ -1,4 +1,8 @@
-6a7,9
+9a10,16
 > 
 > ### Requirement: Added
 > Added behavior.
+> 
+> #### Scenario: Display added behavior
+> - **WHEN** added behavior is requested
+> - **THEN** it is available

@@ -1,6 +1,5 @@
-# Capability A
+# Capability A - Changes
 
 ## RENAMED Requirements
-
-### Requirement: Original Name
-### Requirement: Renamed Name
+- FROM: `### Requirement: Original Name`
+- TO: `### Requirement: Renamed Name`

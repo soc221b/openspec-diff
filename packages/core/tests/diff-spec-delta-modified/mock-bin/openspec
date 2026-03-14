@@ -7,6 +7,6 @@ change_name = sys.argv[2]
 output_spec = repo_root / "openspec" / "specs" / "capability-a" / "spec.md"
 output_spec.parent.mkdir(parents=True, exist_ok=True)
 output_spec.write_text(
-    "# Capability A\n\n## Requirements\n\n### Requirement: Existing\nArchived behavior.\n",
+    "# capability-a Specification\n\n## Purpose\nThis specification covers capability-a.\n\n## Requirements\n\n### Requirement: Existing\nArchived behavior.\n",
     encoding="utf-8",
 )
