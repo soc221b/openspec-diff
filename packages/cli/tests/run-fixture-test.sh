@@ -62,17 +62,20 @@ abort_requested = False
 with open(stdin_path, encoding="utf-8") as handle:
     for raw_line in handle:
         instruction = raw_line.split("#", 1)[0].strip()
+        # Allow fixture scripts to include the CLI invocation line for readability.
         if not instruction or instruction == command_name:
             continue
 
         if instruction == "^C":
             abort_requested = True
+            # Give the CLI a moment to flush the prompt update before interrupting it.
             time.sleep(0.1)
             os.killpg(process.pid, signal.SIGINT)
             break
 
         process.stdin.write(decode_instruction(instruction))
         process.stdin.flush()
+        # Small delay so interactive prompts can react before the next scripted step.
         time.sleep(0.05)
 
 if not abort_requested:
