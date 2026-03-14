@@ -2,15 +2,19 @@ import * as vscode from "vscode";
 
 import { getWelcomeMessage } from "./message.js";
 
-export function activate(context: vscode.ExtensionContext) {
-  const disposable = vscode.commands.registerCommand(
-    "openspecDiff.hello",
-    () => {
-      void vscode.window.showInformationMessage(getWelcomeMessage());
-    },
-  );
+let helloCommand: vscode.Disposable | undefined;
 
-  context.subscriptions.push(disposable);
+export function activate(context: vscode.ExtensionContext) {
+  helloCommand?.dispose();
+
+  helloCommand = vscode.commands.registerCommand("openspecDiff.hello", () => {
+    void vscode.window.showInformationMessage(getWelcomeMessage());
+  });
+
+  context.subscriptions.push(helloCommand);
 }
 
-export function deactivate() {}
+export function deactivate() {
+  helloCommand?.dispose();
+  helloCommand = undefined;
+}

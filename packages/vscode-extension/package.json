@@ -4,7 +4,7 @@
   "displayName": "OpenSpec Diff",
   "description": "Minimal VSCode extension scaffold for openspec-diff.",
   "private": true,
-  "main": "./dist/extension.cjs",
+  "main": "./dist/extension.js",
   "type": "module",
   "engines": {
     "vscode": "^1.110.0"
@@ -23,9 +23,9 @@
   "scripts": {
     "build": "tsc --noEmit && node ./scripts/build.mjs",
     "format": "prettier --check .",
-    "test": "node --experimental-strip-types --test ./src/**/*.test.ts"
+    "test": "node --experimental-strip-types --test ./test/**/*.test.ts"
   },
-  "license": "Apache-2.0",
+  "license": "GPL-3.0-only",
   "devDependencies": {
     "@types/node": "^25.5.0",
     "@types/vscode": "^1.110.0",

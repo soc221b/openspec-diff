@@ -4,9 +4,9 @@ await build({
   bundle: true,
   entryPoints: ["src/extension.ts"],
   external: ["vscode"],
-  format: "cjs",
-  outfile: "dist/extension.cjs",
+  format: "esm",
+  outfile: "dist/extension.js",
   platform: "node",
   sourcemap: true,
-  target: "node20",
+  target: "node22",
 });
