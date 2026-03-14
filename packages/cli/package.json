@@ -1,0 +1,26 @@
+{
+  "name": "@openspec-diff/cli",
+  "version": "0.1.0",
+  "description": "CLI for showing diffs for OpenSpec changes.",
+  "type": "module",
+  "bin": {
+    "openspec-diff": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build"
+  },
+  "keywords": [
+    "openspec",
+    "cli",
+    "diff"
+  ],
+  "author": "",
+  "license": "GPL-3.0-only",
+  "dependencies": {
+    "@inquirer/prompts": "^7.8.0",
+    "@openspec-diff/core": "^0.1.0"
+  }
+}

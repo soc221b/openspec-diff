@@ -1,0 +1,35 @@
+{
+  "name": "openspec-diff",
+  "version": "0.1.0",
+  "description": "Monorepo for OpenSpec diff core, CLI, and VS Code extension packages.",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @openspec-diff/core && npm run build --workspace @openspec-diff/cli && npm run build --workspace @openspec-diff/vscode",
+    "test": "npm run test --workspace @openspec-diff/core",
+    "diff": "node packages/cli/dist/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/soc221b/openspec-diff.git"
+  },
+  "keywords": [
+    "openspec",
+    "diff",
+    "monorepo",
+    "vscode"
+  ],
+  "author": "",
+  "license": "GPL-3.0-only",
+  "bugs": {
+    "url": "https://github.com/soc221b/openspec-diff/issues"
+  },
+  "homepage": "https://github.com/soc221b/openspec-diff#readme",
+  "devDependencies": {
+    "@types/node": "^24.2.0",
+    "typescript": "^5.9.3"
+  }
+}

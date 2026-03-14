@@ -1,0 +1,52 @@
+{
+  "name": "@openspec-diff/vscode",
+  "displayName": "OpenSpec Diff",
+  "version": "0.1.0",
+  "description": "VS Code extension for viewing OpenSpec change diffs.",
+  "type": "module",
+  "main": "./dist/extension.js",
+  "engines": {
+    "vscode": "^1.97.0"
+  },
+  "activationEvents": [
+    "onCommand:openspecDiff.showChangeDiff"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build"
+  },
+  "keywords": [
+    "openspec",
+    "vscode",
+    "diff"
+  ],
+  "author": "",
+  "license": "GPL-3.0-only",
+  "categories": [
+    "Other"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "openspecDiff.showChangeDiff",
+        "title": "Show OpenSpec Diff",
+        "icon": "$(compare-changes)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "openspecDiff.showChangeDiff",
+          "when": "resourceExtname == .md && resourcePath =~ /[\\\\/]openspec[\\\\/]changes[\\\\/][^\\\\/]+[\\\\/]/",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@openspec-diff/core": "^0.1.0"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.97.0"
+  }
+}

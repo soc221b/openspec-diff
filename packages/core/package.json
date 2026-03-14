@@ -1,0 +1,24 @@
+{
+  "name": "@openspec-diff/core",
+  "version": "0.1.0",
+  "description": "Shared OpenSpec change discovery and diff generation.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test dist/**/*.test.js"
+  },
+  "keywords": [
+    "openspec",
+    "diff"
+  ],
+  "author": "",
+  "license": "GPL-3.0-only"
+}
