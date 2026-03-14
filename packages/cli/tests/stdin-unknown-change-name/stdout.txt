@@ -1,0 +1,5 @@
+? Select a change to diff
+❯ alpha-change
+  beta-change
+
+↑↓ navigate • ⏎ select
