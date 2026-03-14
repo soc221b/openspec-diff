@@ -18,7 +18,7 @@ const (
 	changesDirectory  = "changes"
 	specsDirectory    = "specs"
 	specFileName      = "spec.md"
-	// The prompt includes the question line, one blank line, and the navigation hint line.
+	// Add these non-change lines to len(changes) to compute how many lines to clear when redrawing.
 	promptOverhead    = 3
 )
 

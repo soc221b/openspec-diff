@@ -17,7 +17,11 @@ git -C "$TMP_DIR" config difftool.terminaldiff.cmd 'diff "$LOCAL" "$REMOTE"'
 
 (
 	cd "$TMP_DIR"
-	timeout "$CAPTURE_TIMEOUT_SECONDS" sh -c '{ printf "\033[B"; sleep "$2"; tail -f /dev/null; } | "$1"' sh "$CLI_BIN" "$POST_INPUT_SLEEP_SECONDS"
+	timeout "$CAPTURE_TIMEOUT_SECONDS" sh -c '
+		cli_bin=$1
+		post_input_sleep_seconds=$2
+		{ printf "\033[B"; sleep "$post_input_sleep_seconds"; tail -f /dev/null; } | "$cli_bin"
+	' sh "$CLI_BIN" "$POST_INPUT_SLEEP_SECONDS"
 ) >"$TMP_DIR/raw-stdout.txt" 2>"$TMP_DIR/stderr.txt" || true
 
 python - <<'PY' "$TMP_DIR/raw-stdout.txt" "$TMP_DIR/stdout.txt"
