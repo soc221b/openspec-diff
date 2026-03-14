@@ -13,20 +13,18 @@ git -C "$TMP_DIR" config diff.tool terminaldiff
 git -C "$TMP_DIR" config difftool.prompt false
 git -C "$TMP_DIR" config difftool.terminaldiff.cmd 'diff "$LOCAL" "$REMOTE"'
 
-set -- "$CLI_BIN"
-if [ -f "$FIXTURE_DIR/args.txt" ]; then
-	while IFS= read -r arg || [ -n "$arg" ]; do
-		set -- "$@" "$arg"
-	done <"$FIXTURE_DIR/args.txt"
+if [ ! -f "$FIXTURE_DIR/stdin.txt" ]; then
+	printf '%s\n' "Missing required stdin fixture: $FIXTURE_DIR/stdin.txt" >&2
+	exit 1
 fi
 
 (
 	cd "$TMP_DIR"
-	if [ -f "$FIXTURE_DIR/stdin.txt" ]; then
-		FIXTURE_STDIN_PATH="$FIXTURE_DIR/stdin.txt" FIXTURE_STDOUT_PATH="$TMP_DIR/stdout.txt" FIXTURE_STDERR_PATH="$TMP_DIR/stderr.txt" python - <<'PY' "$@"
+	FIXTURE_STDIN_PATH="$FIXTURE_DIR/stdin.txt" FIXTURE_STDOUT_PATH="$TMP_DIR/stdout.txt" FIXTURE_STDERR_PATH="$TMP_DIR/stderr.txt" python - <<'PY' "$CLI_BIN"
 import codecs
 import os
 import re
+import shlex
 import signal
 import subprocess
 import sys
@@ -36,11 +34,10 @@ import time
 stdin_path = os.environ["FIXTURE_STDIN_PATH"]
 stdout_path = os.environ["FIXTURE_STDOUT_PATH"]
 stderr_path = os.environ["FIXTURE_STDERR_PATH"]
-command = sys.argv[1:]
-command_name = os.path.basename(command[0])
+cli_bin = sys.argv[1]
+command_name = os.path.basename(cli_bin)
 OUTPUT_IDLE_TIMEOUT_SECONDS = 0.2
 OUTPUT_POLL_INTERVAL_SECONDS = 0.01
-INITIAL_OUTPUT_LENGTH = 0
 
 
 def decode_instruction(value: str, line_number: int) -> str:
@@ -59,6 +56,16 @@ def normalize_output(value: str) -> str:
     return re.sub(r"\x1b\[\d+A", "", normalized)
 
 
+def parse_invocation(value: str, line_number: int) -> list[str]:
+    """Parse a readable CLI invocation line from stdin.txt."""
+    try:
+        return shlex.split(value)
+    except ValueError as error:
+        raise SystemExit(
+            f"{stdin_path}:{line_number}: invalid CLI invocation in stdin.txt: {error}"
+        ) from error
+
+
 def read_stream_to_buffer(stream, buffer):
     while True:
         chunk = stream.read(1)
@@ -67,13 +74,37 @@ def read_stream_to_buffer(stream, buffer):
         buffer.append(chunk)
 
 
-def wait_for_new_output(process, buffer, previous_length):
-    """Wait briefly for a captured output buffer to grow after scripted input."""
+def wait_for_output_to_settle(process, buffer):
+    """Wait until captured output stops changing briefly or the process exits."""
+    previous_length = len(buffer)
     deadline = time.monotonic() + OUTPUT_IDLE_TIMEOUT_SECONDS
-    while time.monotonic() < deadline:
-        if len(buffer) > previous_length or process.poll() is not None:
+    while process.poll() is None:
+        current_length = len(buffer)
+        if current_length != previous_length:
+            previous_length = current_length
+            deadline = time.monotonic() + OUTPUT_IDLE_TIMEOUT_SECONDS
+        elif time.monotonic() >= deadline:
             return
         time.sleep(OUTPUT_POLL_INTERVAL_SECONDS)
+
+
+command = [cli_bin]
+instructions = []
+seen_instruction = False
+
+with open(stdin_path, encoding="utf-8") as handle:
+    for line_number, raw_line in enumerate(handle, start=1):
+        instruction = raw_line.split("#", 1)[0].strip()
+        if not instruction:
+            continue
+        if not seen_instruction:
+            invocation = parse_invocation(instruction, line_number)
+            if invocation and os.path.basename(invocation[0]) == command_name:
+                command.extend(invocation[1:])
+                seen_instruction = True
+                continue
+        seen_instruction = True
+        instructions.append((line_number, instruction))
 
 
 process = subprocess.Popen(
@@ -86,7 +117,6 @@ process = subprocess.Popen(
 )
 
 abort_requested = False
-seen_instruction = False
 stdout_buffer = []
 stderr_buffer = []
 stdout_thread = threading.Thread(target=read_stream_to_buffer, args=(process.stdout, stdout_buffer))
@@ -94,28 +124,16 @@ stderr_thread = threading.Thread(target=read_stream_to_buffer, args=(process.std
 stdout_thread.start()
 stderr_thread.start()
 
-with open(stdin_path, encoding="utf-8") as handle:
-    for line_number, raw_line in enumerate(handle, start=1):
-        instruction = raw_line.split("#", 1)[0].strip()
-        if not instruction:
-            continue
-        # Allow fixture scripts to start with the CLI invocation line for
-        # readability without stealing later stdin that happens to match it.
-        if not seen_instruction and os.path.basename(instruction) == command_name:
-            seen_instruction = True
-            continue
-        seen_instruction = True
+for line_number, instruction in instructions:
+    if instruction == "^C":
+        abort_requested = True
+        wait_for_output_to_settle(process, stdout_buffer)
+        os.killpg(process.pid, signal.SIGINT)
+        break
 
-        if instruction == "^C":
-            abort_requested = True
-            wait_for_new_output(process, stdout_buffer, INITIAL_OUTPUT_LENGTH)
-            os.killpg(process.pid, signal.SIGINT)
-            break
-
-        previous_stdout_length = len(stdout_buffer)
-        process.stdin.write(decode_instruction(instruction, line_number))
-        process.stdin.flush()
-        wait_for_new_output(process, stdout_buffer, previous_stdout_length)
+    process.stdin.write(decode_instruction(instruction, line_number))
+    process.stdin.flush()
+    wait_for_output_to_settle(process, stdout_buffer)
 
 if not abort_requested:
     process.stdin.close()
@@ -141,11 +159,6 @@ if process.returncode not in (0, 1):
         sys.exit(0)
     sys.exit(process.returncode)
 PY
-	else
-		"$@" >"$TMP_DIR/stdout.txt" 2>"$TMP_DIR/stderr.txt" <<'EOF'
-
-EOF
-	fi
 )
 
 diff -u "$FIXTURE_DIR/stdout.txt" "$TMP_DIR/stdout.txt"

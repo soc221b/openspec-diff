@@ -1,0 +1,2 @@
+openspec-diff # enter interactive mode because there is no change given
+\n # select the first change
