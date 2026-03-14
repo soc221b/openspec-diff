@@ -1,11 +1,10 @@
-# Delta for Capability New
+# Capability New - Changes
 
 ## ADDED Requirements
 
-### Requirement: Capability New
-The system SHALL support capability new spec.
+### Requirement: The system SHALL support capability new spec
 
 #### Scenario: Added
-- GIVEN no capability new
-- WHEN requested
-- THEN capability new spec
+Given capability new
+When requested
+Then capability new spec

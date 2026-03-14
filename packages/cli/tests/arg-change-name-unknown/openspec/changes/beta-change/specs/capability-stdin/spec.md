@@ -1,11 +1,10 @@
-# Delta for Capability STDIN
+# Capability STDIN - Changes
 
 ## MODIFIED Requirements
 
-### Requirement: Capability STDIN
-The system SHALL support changed stdin capability.
+### Requirement: The system SHALL support changed stdin capability
 
 #### Scenario: Changed
-- GIVEN capability stdin
-- WHEN requested
-- THEN changed stdin capability
+Given capability stdin
+When requested
+Then changed stdin capability

@@ -1,11 +1,10 @@
-# Delta for Capability C
+# Capability C - Changes
 
 ## MODIFIED Requirements
 
-### Requirement: Capability C
-The system SHALL support changed capability c.
+### Requirement: The system SHALL support changed capability c
 
 #### Scenario: Changed
-- GIVEN capability c
-- WHEN requested
-- THEN changed capability c
+Given capability c
+When requested
+Then changed capability c
