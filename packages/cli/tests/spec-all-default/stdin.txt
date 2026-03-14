@@ -1,0 +1,2 @@
+openspec-diff two-specs
+\n # select all specs

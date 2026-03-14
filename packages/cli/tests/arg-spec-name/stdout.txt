@@ -1,0 +1,5 @@
+Diffing capability-b/spec.md
+1c1
+< # main capability b
+---
+> # changed capability b

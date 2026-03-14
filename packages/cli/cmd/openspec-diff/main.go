@@ -11,7 +11,7 @@ import (
 	"github.com/soc221b/openspec-diff/packages/cli/internal/app"
 )
 
-const helpText = `Usage: openspec-diff [options] [change-name]
+const helpText = `Usage: openspec-diff [options] [change-name] [spec-name]
 
 Show changes between delta specs of a change and the main specs
 
@@ -25,13 +25,13 @@ func main() {
 		return
 	}
 
-	changeName, err := parseChangeNameArg(os.Args[1:])
+	changeName, specName, err := parsePositionalArgs(os.Args[1:])
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
-	if err := app.Run(context.Background(), os.Stdin, os.Stdout, ".", changeName, runCommand); err != nil {
+	if err := app.Run(context.Background(), os.Stdin, os.Stdout, ".", changeName, specName, runCommand); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -47,18 +47,25 @@ func hasHelpArg(args []string) bool {
 	return false
 }
 
-func parseChangeNameArg(args []string) (string, error) {
-	if len(args) == 0 {
-		return "", nil
+func parsePositionalArgs(args []string) (string, string, error) {
+	positionalArgs := make([]string, 0, len(args))
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "-") {
+			return "", "", fmt.Errorf("unknown option %q", arg)
+		}
+		positionalArgs = append(positionalArgs, arg)
 	}
-	if len(args) > 1 {
-		return "", fmt.Errorf("expected at most one change name argument")
+	if len(positionalArgs) > 2 {
+		return "", "", fmt.Errorf("expected at most one change name argument and one spec name argument")
 	}
-	if strings.HasPrefix(args[0], "-") {
-		return "", fmt.Errorf("unknown option %q", args[0])
+	if len(positionalArgs) == 0 {
+		return "", "", nil
+	}
+	if len(positionalArgs) == 1 {
+		return positionalArgs[0], "", nil
 	}
 
-	return args[0], nil
+	return positionalArgs[0], positionalArgs[1], nil
 }
 
 func runCommand(ctx context.Context, dir string, name string, args ...string) error {

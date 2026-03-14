@@ -1,4 +1,4 @@
-Usage: openspec-diff [options] [change-name]
+Usage: openspec-diff [options] [change-name] [spec-name]
 
 Show changes between delta specs of a change and the main specs
 

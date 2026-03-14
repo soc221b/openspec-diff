@@ -25,6 +25,7 @@ const (
 
 var errNoChanges = errors.New("no active changes found")
 var errNoSelection = errors.New("no change selected")
+var errNoSpecSelection = errors.New("no spec selected")
 
 type CommandRunner func(ctx context.Context, dir string, name string, args ...string) error
 
@@ -34,7 +35,7 @@ type specPair struct {
 	mainPath   string
 }
 
-func Run(ctx context.Context, stdin io.Reader, stdout io.Writer, workDir string, changeName string, run CommandRunner) error {
+func Run(ctx context.Context, stdin io.Reader, stdout io.Writer, workDir string, changeName string, specName string, run CommandRunner) error {
 	repoRoot, err := findRepoRoot(workDir)
 	if err != nil {
 		return err
@@ -68,7 +69,16 @@ func Run(ctx context.Context, stdin io.Reader, stdout io.Writer, workDir string,
 		return nil
 	}
 
-	for _, pair := range specPairs {
+	selectedSpecPairs, err := selectRequestedSpec(stdin, stdout, specPairs, specName)
+	if err != nil {
+		if errors.Is(err, errNoSpecSelection) {
+			_, _ = fmt.Fprintln(stdout, "No spec selected. Aborting.")
+			return nil
+		}
+		return err
+	}
+
+	for _, pair := range selectedSpecPairs {
 		mainPath := pair.mainPath
 		cleanup := func() error { return nil }
 		if mainPath == "" {
@@ -261,6 +271,146 @@ func resolveExactChange(changes []string, rawSelection string) (string, error) {
 	}
 
 	return "", fmt.Errorf("Change '%s' not found.", selection)
+}
+
+func selectRequestedSpec(stdin io.Reader, stdout io.Writer, specPairs []specPair, specName string) ([]specPair, error) {
+	selection := strings.TrimSpace(specName)
+	if selection != "" {
+		return filterSpecPairs(specPairs, selection)
+	}
+	if len(specPairs) <= 1 {
+		return specPairs, nil
+	}
+
+	options := make([]string, 0, len(specPairs)+1)
+	options = append(options, "all")
+	for _, pair := range specPairs {
+		options = append(options, pair.name)
+	}
+
+	selectedSpec, err := selectSpec(stdin, stdout, options)
+	if err != nil {
+		return nil, err
+	}
+	return filterSpecPairs(specPairs, selectedSpec)
+}
+
+func selectSpec(stdin io.Reader, stdout io.Writer, specs []string) (string, error) {
+	reader := bufio.NewReader(stdin)
+	selectedIndex := 0
+	typedSelection := strings.Builder{}
+	rendered := false
+
+	renderPrompt := func() {
+		if rendered {
+			_, _ = fmt.Fprintf(stdout, "\x1b[%dA\x1b[J", len(specs)+promptOverhead)
+		}
+
+		_, _ = fmt.Fprintln(stdout, "? Select a spec to diff")
+		for index, spec := range specs {
+			prefix := " "
+			if index == selectedIndex {
+				prefix = "❯"
+			}
+			_, _ = fmt.Fprintf(stdout, "%s %s\n", prefix, spec)
+		}
+		_, _ = fmt.Fprintln(stdout)
+		_, _ = fmt.Fprintln(stdout, "↑↓ navigate • ⏎ select")
+		rendered = true
+	}
+
+	renderPrompt()
+
+	for {
+		input, err := reader.ReadByte()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return resolveSpecSelection(stdout, specs, selectedIndex, typedSelection.String(), true)
+			}
+			return "", err
+		}
+
+		switch input {
+		case '\r', '\n':
+			return resolveSpecSelection(stdout, specs, selectedIndex, typedSelection.String(), false)
+		case '\x1b':
+			next, err := reader.ReadByte()
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					return resolveSpecSelection(stdout, specs, selectedIndex, typedSelection.String(), true)
+				}
+				return "", err
+			}
+			if next != '[' {
+				typedSelection.WriteByte(input)
+				typedSelection.WriteByte(next)
+				continue
+			}
+
+			direction, err := reader.ReadByte()
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					return resolveSpecSelection(stdout, specs, selectedIndex, typedSelection.String(), true)
+				}
+				return "", err
+			}
+
+			switch direction {
+			case 'A':
+				if selectedIndex > 0 {
+					selectedIndex--
+				}
+				renderPrompt()
+			case 'B':
+				if selectedIndex < len(specs)-1 {
+					selectedIndex++
+				}
+				renderPrompt()
+			default:
+				typedSelection.WriteByte(input)
+				typedSelection.WriteByte(next)
+				typedSelection.WriteByte(direction)
+			}
+		default:
+			typedSelection.WriteByte(input)
+		}
+	}
+}
+
+func resolveSpecSelection(stdout io.Writer, specs []string, selectedIndex int, rawSelection string, eof bool) (string, error) {
+	selection := strings.TrimSpace(rawSelection)
+	if selection == "" {
+		if eof {
+			return "", errNoSpecSelection
+		}
+
+		selected := specs[selectedIndex]
+		_, _ = fmt.Fprintf(stdout, "✔ Select a spec to diff %s\n\n", selected)
+		return selected, nil
+	}
+
+	for _, spec := range specs {
+		if spec == selection {
+			_, _ = fmt.Fprintf(stdout, "✔ Select a spec to diff %s\n\n", spec)
+			return spec, nil
+		}
+	}
+
+	return "", fmt.Errorf("Spec '%s' not found.", selection)
+}
+
+func filterSpecPairs(specPairs []specPair, selection string) ([]specPair, error) {
+	if selection == "all" {
+		return specPairs, nil
+	}
+
+	for _, pair := range specPairs {
+		if pair.name == selection {
+			return []specPair{pair}, nil
+		}
+	}
+
+	return nil, fmt.Errorf("Spec '%s' not found.", selection)
 }
 
 func collectSpecPairs(repoRoot, change string) ([]specPair, error) {
