@@ -21,7 +21,7 @@ const (
 	// This is the count of fixed UI lines outside the changes list that must be
 	// included when moving the cursor back up to redraw the prompt: the question
 	// line, the blank spacer line, and the navigation hint line.
-	promptOverhead    = 3
+	promptOverhead = 3
 )
 
 var errNoChanges = errors.New("no active changes found")
