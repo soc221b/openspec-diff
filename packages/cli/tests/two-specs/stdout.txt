@@ -4,6 +4,14 @@
 ↑↓ navigate • ⏎ select
 ✔ Select a change to diff two-specs
 
+? Select a spec to diff
+❯ all
+  capability-a/spec.md
+  capability-b/spec.md
+
+↑↓ navigate • ⏎ select
+✔ Select a spec to diff all
+
 Diffing capability-a/spec.md
 1c1
 < # main capability a

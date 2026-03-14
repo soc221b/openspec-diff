@@ -1,2 +1,3 @@
 openspec-diff
 \n # select the first change
+\n # select all specs
