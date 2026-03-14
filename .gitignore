@@ -1,0 +1,10 @@
+node_modules/
+dist/
+packages/core/Cargo.lock
+packages/*/bin/
+packages/*/dist/
+
+
+
+.nx/cache
+.nx/workspace-data
