@@ -38,6 +38,7 @@ cli_bin = sys.argv[1]
 command_name = os.path.basename(cli_bin)
 OUTPUT_IDLE_TIMEOUT_SECONDS = 0.2
 OUTPUT_POLL_INTERVAL_SECONDS = 0.01
+MAX_OUTPUT_SETTLE_SECONDS = 1.0
 
 
 def decode_instruction(value: str, line_number: int) -> str:
@@ -64,7 +65,8 @@ def parse_invocation(value: str, line_number: int) -> list[str]:
         line_number: The 1-based source line number for error reporting.
 
     Returns:
-        The shell-style tokenized CLI invocation from stdin.txt.
+        The shell-style tokenized CLI invocation from stdin.txt, such as
+        ``openspec-diff --help``.
     """
     try:
         return shlex.split(value)
@@ -119,13 +121,15 @@ def read_stream_to_buffer(stream, buffer):
 def wait_for_output_to_settle(process, buffer):
     """Wait until captured output stops changing briefly or the process exits."""
     previous_length = len(buffer)
-    deadline = time.monotonic() + OUTPUT_IDLE_TIMEOUT_SECONDS
+    idle_deadline = time.monotonic() + OUTPUT_IDLE_TIMEOUT_SECONDS
+    overall_deadline = time.monotonic() + MAX_OUTPUT_SETTLE_SECONDS
     while process.poll() is None:
         current_length = len(buffer)
         if current_length != previous_length:
             previous_length = current_length
-            deadline = time.monotonic() + OUTPUT_IDLE_TIMEOUT_SECONDS
-        elif time.monotonic() >= deadline:
+            idle_deadline = time.monotonic() + OUTPUT_IDLE_TIMEOUT_SECONDS
+        now = time.monotonic()
+        if now >= idle_deadline or now >= overall_deadline:
             return
         time.sleep(OUTPUT_POLL_INTERVAL_SECONDS)
 
