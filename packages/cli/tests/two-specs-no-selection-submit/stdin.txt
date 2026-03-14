@@ -1,2 +1,0 @@
-openspec-diff two-specs
-\n # press enter without selecting any specs

@@ -1,2 +1,0 @@
-openspec-diff
-beta-change\n # submit the named change by pressing enter
