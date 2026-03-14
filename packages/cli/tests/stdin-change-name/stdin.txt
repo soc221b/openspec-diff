@@ -1,1 +1,2 @@
-beta-change
+openspec-diff # enter interactive mode because there is no change given
+beta-change # select the named change without a trailing newline

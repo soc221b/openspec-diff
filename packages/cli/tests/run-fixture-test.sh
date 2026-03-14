@@ -23,11 +23,80 @@ fi
 (
 	cd "$TMP_DIR"
 	if [ -f "$FIXTURE_DIR/stdin.txt" ]; then
-		cat "$FIXTURE_DIR/stdin.txt" | "$@"
+		FIXTURE_STDIN_PATH="$FIXTURE_DIR/stdin.txt" FIXTURE_STDOUT_PATH="$TMP_DIR/stdout.txt" FIXTURE_STDERR_PATH="$TMP_DIR/stderr.txt" python - <<'PY' "$@"
+import codecs
+import os
+import re
+import signal
+import subprocess
+import sys
+import time
+
+stdin_path = os.environ["FIXTURE_STDIN_PATH"]
+stdout_path = os.environ["FIXTURE_STDOUT_PATH"]
+stderr_path = os.environ["FIXTURE_STDERR_PATH"]
+command = sys.argv[1:]
+
+
+def decode_instruction(value: str) -> str:
+    return codecs.decode(value, "unicode_escape")
+
+
+def normalize_output(value: str) -> str:
+    normalized = value.rsplit("\x1b[J", 1)[-1]
+    return re.sub(r"\x1b\[\d+A", "", normalized)
+
+
+process = subprocess.Popen(
+    command,
+    stdin=subprocess.PIPE,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    text=True,
+    preexec_fn=os.setsid,
+)
+
+abort_requested = False
+
+with open(stdin_path, encoding="utf-8") as handle:
+    for raw_line in handle:
+        instruction = raw_line.split("#", 1)[0].strip()
+        if not instruction or instruction == "openspec-diff":
+            continue
+
+        if instruction == "^C":
+            abort_requested = True
+            time.sleep(0.1)
+            os.killpg(process.pid, signal.SIGINT)
+            break
+
+        process.stdin.write(decode_instruction(instruction))
+        process.stdin.flush()
+        time.sleep(0.05)
+
+if not abort_requested:
+    process.stdin.close()
+    process.stdin = None
+
+stdout, stderr = process.communicate()
+
+with open(stdout_path, "w", encoding="utf-8") as handle:
+    handle.write(normalize_output(stdout))
+
+with open(stderr_path, "w", encoding="utf-8") as handle:
+    handle.write(stderr)
+
+if process.returncode not in (0, 1):
+    if abort_requested and process.returncode in (-signal.SIGINT, 128 + signal.SIGINT):
+        sys.exit(0)
+    sys.exit(process.returncode)
+PY
 	else
-		printf '\n' | "$@"
+		"$@" >"$TMP_DIR/stdout.txt" 2>"$TMP_DIR/stderr.txt" <<'EOF'
+
+EOF
 	fi
-) >"$TMP_DIR/stdout.txt" 2>"$TMP_DIR/stderr.txt"
+)
 
 diff -u "$FIXTURE_DIR/stdout.txt" "$TMP_DIR/stdout.txt"
 diff -u "$FIXTURE_DIR/stderr.txt" "$TMP_DIR/stderr.txt"

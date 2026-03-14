@@ -1,3 +1,2 @@
 openspec-diff # enter interactive mode because there is no change given
-\033[B # navigate to the second change
 ^C # abort, in order to capture the stdout
