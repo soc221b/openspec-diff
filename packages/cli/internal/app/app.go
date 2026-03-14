@@ -137,33 +137,95 @@ func listChanges(repoRoot string) ([]string, error) {
 }
 
 func selectChange(stdin io.Reader, stdout io.Writer, changes []string) (string, error) {
-	_, _ = fmt.Fprintln(stdout, "? Select a change to diff")
-	for index, change := range changes {
-		prefix := " "
-		if index == 0 {
-			prefix = "❯"
+	reader := bufio.NewReader(stdin)
+	selectedIndex := 0
+	typedSelection := strings.Builder{}
+	rendered := false
+
+	renderPrompt := func() {
+		if rendered {
+			_, _ = fmt.Fprintf(stdout, "\x1b[%dA\x1b[J", len(changes)+3)
 		}
-		_, _ = fmt.Fprintf(stdout, "%s %s\n", prefix, change)
-	}
-	_, _ = fmt.Fprintln(stdout)
-	_, _ = fmt.Fprintln(stdout, "↑↓ navigate • ⏎ select")
 
-	input, err := bufio.NewReader(stdin).ReadString('\n')
-	if err != nil && !errors.Is(err, io.EOF) {
-		return "", err
+		_, _ = fmt.Fprintln(stdout, "? Select a change to diff")
+		for index, change := range changes {
+			prefix := " "
+			if index == selectedIndex {
+				prefix = "❯"
+			}
+			_, _ = fmt.Fprintf(stdout, "%s %s\n", prefix, change)
+		}
+		_, _ = fmt.Fprintln(stdout)
+		_, _ = fmt.Fprintln(stdout, "↑↓ navigate • ⏎ select")
+		rendered = true
 	}
 
-	if selected, ok := selectChangeByNavigation(input, changes); ok {
-		_, _ = fmt.Fprintf(stdout, "✔ Select a change to diff %s\n\n", selected)
-		return selected, nil
-	}
+	renderPrompt()
 
-	selection := strings.TrimSpace(input)
+	for {
+		input, err := reader.ReadByte()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return resolveSelection(stdout, changes, selectedIndex, typedSelection.String(), true)
+			}
+			return "", err
+		}
+
+		switch input {
+		case '\r', '\n':
+			return resolveSelection(stdout, changes, selectedIndex, typedSelection.String(), false)
+		case '\x1b':
+			next, err := reader.ReadByte()
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					return resolveSelection(stdout, changes, selectedIndex, typedSelection.String(), true)
+				}
+				return "", err
+			}
+			if next != '[' {
+				typedSelection.WriteByte(input)
+				typedSelection.WriteByte(next)
+				continue
+			}
+
+			direction, err := reader.ReadByte()
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					return resolveSelection(stdout, changes, selectedIndex, typedSelection.String(), true)
+				}
+				return "", err
+			}
+
+			switch direction {
+			case 'A':
+				if selectedIndex > 0 {
+					selectedIndex--
+				}
+				renderPrompt()
+			case 'B':
+				if selectedIndex < len(changes)-1 {
+					selectedIndex++
+				}
+				renderPrompt()
+			default:
+				typedSelection.WriteByte(input)
+				typedSelection.WriteByte(next)
+				typedSelection.WriteByte(direction)
+			}
+		default:
+			typedSelection.WriteByte(input)
+		}
+	}
+}
+
+func resolveSelection(stdout io.Writer, changes []string, selectedIndex int, rawSelection string, eof bool) (string, error) {
+	selection := strings.TrimSpace(rawSelection)
 	if selection == "" {
-		if errors.Is(err, io.EOF) {
+		if eof {
 			return "", errNoSelection
 		}
-		selected := changes[0]
+
+		selected := changes[selectedIndex]
 		_, _ = fmt.Fprintf(stdout, "✔ Select a change to diff %s\n\n", selected)
 		return selected, nil
 	}
@@ -185,42 +247,6 @@ func selectChange(stdin io.Reader, stdout io.Writer, changes []string) (string, 
 	}
 
 	return "", fmt.Errorf("unknown change %q", selection)
-}
-
-func selectChangeByNavigation(input string, changes []string) (string, bool) {
-	if !strings.Contains(input, "\x1b") {
-		return "", false
-	}
-
-	selectedIndex := 0
-	sawNavigation := false
-
-	for index := 0; index < len(input); {
-		switch {
-		case strings.HasPrefix(input[index:], "\x1b[A"):
-			sawNavigation = true
-			if selectedIndex > 0 {
-				selectedIndex--
-			}
-			index += len("\x1b[A")
-		case strings.HasPrefix(input[index:], "\x1b[B"):
-			sawNavigation = true
-			if selectedIndex < len(changes)-1 {
-				selectedIndex++
-			}
-			index += len("\x1b[B")
-		case input[index] == '\r' || input[index] == '\n':
-			index++
-		default:
-			return "", false
-		}
-	}
-
-	if !sawNavigation {
-		return "", false
-	}
-
-	return changes[selectedIndex], true
 }
 
 func collectSpecPairs(repoRoot, change string) ([]specPair, error) {

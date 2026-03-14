@@ -1,13 +1,6 @@
 ? Select a change to diff
-❯ change-1
-  change-2
+  change-1
+❯ change-2
   change-3
 
 ↑↓ navigate • ⏎ select
-✔ Select a change to diff change-2
-
-Diffing capability-b/spec.md
-1c1
-< # main capability b
----
-> # changed capability b

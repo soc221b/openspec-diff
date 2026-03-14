@@ -10,16 +10,16 @@ import (
 	"github.com/soc221b/openspec-diff/packages/cli/internal/app"
 )
 
-const helpText = `Diff an OpenSpec change against the main specs.
+const helpText = `Diff OpenSpec delta specs against the main specs.
 
 Usage:
   openspec-diff [options]
 
 Description:
   Shows the active OpenSpec changes, lets you select one to diff, and compares
-  that change's specs against the main specs. Press Enter to select the first
-  change, type a 1-based index, use ↑/↓ followed by Enter, or pipe a change
-  name on stdin.
+  the selected change's delta specs against the main specs. Press Enter to
+  select the first change, type a 1-based index, use ↑/↓ followed by Enter, or
+  pipe a change name on stdin.
 
 Options:
   --help, -h    Show help for openspec-diff.
