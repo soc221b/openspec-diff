@@ -6,6 +6,28 @@
 
 Diffing capability-a/spec.md
 1c1
-< # main capability a
+< # Capability A Specification
 ---
-> # changed capability a
+> # Delta for Capability A
+3,6c3
+< ## Purpose
+< Defines the behavior for capability a.
+< 
+< ## Requirements
+---
+> ## MODIFIED Requirements
+9c6,7
+< The system SHALL support main capability a.
+---
+> The system SHALL support changed capability a.
+> (Previously: The system SHALL support main capability a.)
+11c9
+< #### Scenario: Capability A is requested
+---
+> #### Scenario: Capability A is updated
+13,14c11,12
+< - WHEN a user requests capability a
+< - THEN the system fulfills main capability a
+---
+> - WHEN a user requests the updated capability a
+> - THEN the system fulfills changed capability a

@@ -7,6 +7,28 @@
 
 Diffing capability-stdin/spec.md
 1c1
-< # main stdin capability
+< # Capability STDIN Specification
 ---
-> # changed stdin capability
+> # Delta for Capability STDIN
+3,6c3
+< ## Purpose
+< Defines the behavior for capability stdin.
+< 
+< ## Requirements
+---
+> ## MODIFIED Requirements
+9c6,7
+< The system SHALL support main stdin capability.
+---
+> The system SHALL support changed stdin capability.
+> (Previously: The system SHALL support main stdin capability.)
+11c9
+< #### Scenario: Capability STDIN is requested
+---
+> #### Scenario: Capability STDIN is updated
+13,14c11,12
+< - WHEN a user requests capability stdin
+< - THEN the system fulfills main stdin capability
+---
+> - WHEN a user requests the updated capability stdin
+> - THEN the system fulfills changed stdin capability

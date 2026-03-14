@@ -5,5 +5,15 @@
 ✔ Select a change to diff new-spec
 
 Diffing capability-new/spec.md
-0a1
-> # capability new spec
+0a1,11
+> # Delta for Capability New
+> 
+> ## ADDED Requirements
+> 
+> ### Requirement: Capability New behavior
+> The system SHALL support capability new spec.
+> 
+> #### Scenario: Capability New is added
+> - GIVEN capability new is not yet supported
+> - WHEN a user requests capability new
+> - THEN the system fulfills capability new spec
