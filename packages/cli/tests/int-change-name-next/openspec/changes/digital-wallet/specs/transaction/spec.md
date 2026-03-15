@@ -1,4 +1,4 @@
-# Transaction - Changes
+# Transaction Specification - Changes
 
 ## MODIFIED Requirements
 

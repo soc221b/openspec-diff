@@ -1,4 +1,4 @@
-# transaction Specification
+# Transaction Specification
 
 ## Purpose
 This specification describes how completed purchases are recorded for later review.

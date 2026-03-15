@@ -1,4 +1,4 @@
-# Auth - Changes
+# Auth Specification - Changes
 
 ## RENAMED Requirements
 - FROM: `### Requirement: The system SHALL let a customer sign in with a verified account`

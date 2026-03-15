@@ -1,4 +1,4 @@
-# auth Specification
+# Auth Specification
 
 ## Purpose
 This specification describes an older sign-in rule that still appears in legacy accounts.

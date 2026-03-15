@@ -1,4 +1,4 @@
-# Auth - Changes
+# Auth Specification - Changes
 
 ## REMOVED Requirements
 

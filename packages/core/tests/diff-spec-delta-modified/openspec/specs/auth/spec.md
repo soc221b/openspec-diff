@@ -1,4 +1,4 @@
-# auth Specification
+# Auth Specification
 
 ## Purpose
 This specification describes how customers sign in to reach protected product areas.

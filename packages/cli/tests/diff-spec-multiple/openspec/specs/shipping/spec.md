@@ -1,4 +1,4 @@
-# shipping Specification
+# Shipping Specification
 
 ## Purpose
 This specification describes how shipment progress is shown after an order ships.
