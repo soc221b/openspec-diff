@@ -38,7 +38,15 @@ pub fn diff_with_openspec_command(
         .status()
         .map_err(|error| format!("failed to run git difftool: {error}"))?;
 
-    Ok(status.code().unwrap_or(2))
+    Ok(normalize_diff_exit_code(status.code()))
+}
+
+fn normalize_diff_exit_code(code: Option<i32>) -> i32 {
+    match code {
+        Some(1) => 0,
+        Some(code) => code,
+        None => 2,
+    }
 }
 
 struct PreparedDiff {
