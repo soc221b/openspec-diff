@@ -4,65 +4,58 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { assertFixtureResult, runFixtureCommand } from './run-test.mjs';
+import { assertFixtureResult, runFixtureCommand, runFixtureSuite } from './run-test.ts';
 
 test('runFixtureCommand captures stdout, stderr, and exit code for non-interactive commands', async () => {
   const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'run-test-command-'));
 
   try {
-    const result = await runFixtureCommand(
-      {
-        command: ['node', '-e', 'process.stdout.write("out");process.stderr.write("err");process.exit(3)'],
-        instructions: [],
-        interactive: false,
-      },
-      workspaceDir
-    );
+    const result = await runFixtureCommand({
+      commands: ['node', '-e', 'process.stdout.write("out");process.stderr.write("err");process.exit(3)'],
+      workingDirectory: workspaceDir,
+    });
 
     assert.deepEqual(result, {
       stdout: 'out',
       stderr: 'err',
       exitCode: 3,
-      signalCode: null,
-      aborted: false,
-      timedOut: false,
     });
   } finally {
     fs.rmSync(workspaceDir, { recursive: true, force: true });
   }
 });
 
-test('runFixtureCommand replays scripted interactive input before collecting results', async () => {
-  const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'run-test-interactive-'));
+test('runFixtureSuite handles scripted interactive fixtures through the shared runner pipeline', async () => {
+  const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'run-test-suite-'));
+  const packageDir = path.join(workspaceRoot, 'packages', 'cli');
+  const testsDir = path.join(packageDir, 'tests');
+  const fixtureDir = path.join(testsDir, 'interactive-fixture');
+  const openspecDir = path.join(fixtureDir, 'openspec');
+  const binDir = path.join(packageDir, 'bin');
+  const runnerPath = path.join(binDir, 'openspec-diff');
 
   try {
-    const result = await runFixtureCommand(
-      {
-        command: [
-          'node',
-          '-e',
-          [
-            'process.stdin.setEncoding("utf8");',
-            'let value = "";',
-            'process.stdin.on("data", (chunk) => { value += chunk; });',
-            'process.stdin.on("end", () => { process.stdout.write(value.toUpperCase()); });',
-          ].join(' '),
-        ],
-        instructions: [{ lineNumber: 2, value: 'hello\\n' }],
-        interactive: true,
-        stdinPath: '/fixture/stdin.txt',
-      },
-      workspaceDir
+    fs.mkdirSync(openspecDir, { recursive: true });
+    fs.mkdirSync(binDir, { recursive: true });
+    fs.writeFileSync(
+      runnerPath,
+      [
+        '#!/usr/bin/env node',
+        'process.stdin.setEncoding("utf8");',
+        'let value = "";',
+        'process.stdin.on("data", (chunk) => { value += chunk; });',
+        'process.stdin.on("end", () => { process.stdout.write(value.toUpperCase()); });',
+      ].join('\n'),
+      'utf8'
     );
+    fs.chmodSync(runnerPath, 0o755);
+    fs.writeFileSync(path.join(fixtureDir, 'stdin.txt'), 'openspec-diff\nhello\\n\n', 'utf8');
+    fs.writeFileSync(path.join(fixtureDir, 'stdout.txt'), 'HELLO\n', 'utf8');
+    fs.writeFileSync(path.join(fixtureDir, 'exit-code.txt'), '0\n', 'utf8');
 
-    assert.equal(result.stdout, 'HELLO\n');
-    assert.equal(result.stderr, '');
-    assert.equal(result.exitCode, 0);
-    assert.equal(result.signalCode, null);
-    assert.equal(result.aborted, false);
-    assert.equal(result.timedOut, false);
+    assert.deepEqual(await runFixtureSuite({ workspaceRoot, testsPath: testsDir }), []);
   } finally {
-    fs.rmSync(workspaceDir, { recursive: true, force: true });
+    fs.rmSync(workspaceRoot, { recursive: true, force: true });
   }
 });
 
@@ -81,19 +74,11 @@ test('assertFixtureResult compares stdout, stderr, and exit codes together', () 
     assert.doesNotThrow(() =>
       assertFixtureResult({
         fixtureDir,
-        commandPlan: {
-          fixtureDir,
-          stdinPath: path.join(fixtureDir, 'stdin.txt'),
-          instructions: [{ lineNumber: 2, value: '^C' }],
-        },
         outputPaths: { workspaceDir, stdoutPath, stderrPath },
         result: {
           stdout: 'hello\n',
           stderr: `${workspaceDir}/problem\n`,
-          exitCode: null,
-          signalCode: 'SIGINT',
-          aborted: true,
-          timedOut: false,
+          exitCode: 130,
         },
       })
     );
@@ -117,19 +102,11 @@ test('assertFixtureResult fails when the exit code does not match the fixture ex
       () =>
         assertFixtureResult({
           fixtureDir,
-          commandPlan: {
-            fixtureDir,
-            stdinPath: path.join(fixtureDir, 'stdin.txt'),
-            instructions: [],
-          },
           outputPaths: { workspaceDir, stdoutPath, stderrPath },
           result: {
             stdout: 'ok\n',
             stderr: '',
             exitCode: 1,
-            signalCode: null,
-            aborted: false,
-            timedOut: false,
           },
         }),
       new RegExp(`${fixtureDir.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}/exit-code.txt: expected 0, received 1`)
