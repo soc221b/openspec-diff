@@ -176,6 +176,22 @@ fn preprocess_change_spec(
         ));
     }
 
+    if archive_aborted_without_writing(&output) {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+        let details = if !stderr.is_empty() {
+            stderr
+        } else if !stdout.is_empty() {
+            stdout
+        } else {
+            String::from("openspec archive reported no changes")
+        };
+        return Err(format!(
+            "failed to preprocess delta spec {}: {details}",
+            context.change_spec_path.display()
+        ));
+    }
+
     let synthesized_spec_path = temp_root.join(context.main_spec_relative_path());
     if !synthesized_spec_path.exists() {
         return Err(format!(
@@ -187,6 +203,14 @@ fn preprocess_change_spec(
 
     guards.push(temp_guard);
     Ok(synthesized_spec_path)
+}
+
+fn archive_aborted_without_writing(output: &std::process::Output) -> bool {
+    let aborted_marker = "Aborted. No files were changed.";
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    stdout.contains(aborted_marker) || stderr.contains(aborted_marker)
 }
 
 fn copy_file(source: &Path, target: &Path) -> Result<(), String> {
