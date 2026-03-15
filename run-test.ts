@@ -11,7 +11,10 @@ const OUTPUT_POLL_INTERVAL_MS = 10;
 const MAX_OUTPUT_SETTLE_MS = 1000;
 const PROCESS_EXIT_TIMEOUT_MS = 5000;
 const SIGNAL_EXIT_CODE_OFFSET = 128;
-main().catch(handleFatalError);
+
+if (require.main === module) {
+  main().catch(handleFatalError);
+}
 
 async function main() {
   const testsPath = getTestsPath(process.argv);
@@ -625,3 +628,12 @@ function handleFatalError(error) {
   console.error(message);
   process.exit(1);
 }
+
+module.exports = {
+  __test: {
+    getActualExitCode,
+    parseInvocation,
+    readExpectedExitCode,
+    stripInlineComment,
+  },
+};
