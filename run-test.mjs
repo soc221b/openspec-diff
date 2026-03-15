@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // @ts-check
 
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
-const { spawn, spawnSync } = require('node:child_process');
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { spawn, spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const OUTPUT_IDLE_TIMEOUT_MS = 200;
 const OUTPUT_POLL_INTERVAL_MS = 10;
@@ -26,26 +27,10 @@ const PACKAGE_CONTEXTS = {
   },
 };
 
-if (require.main === module) {
-  main().catch(handleFatalError);
-}
-
-async function main() {
-  const testsPath = getTestsPath(process.argv);
-  const workspaceRoot = __dirname;
-  const context = createContext(workspaceRoot, testsPath);
-  const fixtureFailures = /** @type {Array<{ fixtureDir: string; message: string }>} */ ([]);
-
-  ensurePathExists(testsPath);
-
-  for (const fixtureDir of getFixtureDirectories(testsPath)) {
-    const failure = await runFixture(context, fixtureDir);
-    process.stdout.write(failure ? 'x' : '.');
-
-    if (failure) {
-      fixtureFailures.push(failure);
-    }
-  }
+export async function main(argv = process.argv) {
+  const testsPath = getTestsPath(argv);
+  const workspaceRoot = getWorkspaceRoot(import.meta.url);
+  const fixtureFailures = await runFixtureSuite({ workspaceRoot, testsPath });
 
   process.stdout.write('\n');
 
@@ -54,25 +39,31 @@ async function main() {
   }
 }
 
-async function runFixture(context, fixtureDir) {
+export async function runFixtureSuite({ workspaceRoot, testsPath }) {
+  ensurePathExists(testsPath);
+
+  const context = createContext(workspaceRoot, testsPath);
+  const fixtureFailures = [];
+
+  for (const fixtureDir of getFixtureDirectories(testsPath)) {
+    const failure = await executeFixture(context, fixtureDir);
+    process.stdout.write(failure ? 'x' : '.');
+
+    if (failure) {
+      fixtureFailures.push(failure);
+    }
+  }
+
+  return fixtureFailures;
+}
+
+async function executeFixture(context, fixtureDir) {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openspec-diff-test-'));
 
   try {
-    ensureFixtureInputs(fixtureDir);
-    const outputPaths = prepareFixtureWorkspace(context, fixtureDir, tempDir);
-    const commandPlan = parseFixturePlan(
-      fixtureDir,
-      outputPaths.commandPath,
-      context.commandName,
-      context.interactive
-    );
-    const result = context.interactive
-      ? await runInteractiveCommand(commandPlan, outputPaths)
-      : runNonInteractiveCommand(commandPlan, outputPaths);
-
-    writeCommandOutputs(fixtureDir, outputPaths, result);
-    validateCommandResult(result, commandPlan);
-    assertFixtureOutputs(fixtureDir, outputPaths);
+    const execution = createFixtureExecution(context, fixtureDir, tempDir);
+    const result = await runFixtureCommand(execution.commandPlan, execution.outputPaths.workspaceDir);
+    assertFixtureResult({ ...execution, result });
     return null;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -82,9 +73,35 @@ async function runFixture(context, fixtureDir) {
   }
 }
 
-function runNonInteractiveCommand(commandPlan, outputPaths) {
+function createFixtureExecution(context, fixtureDir, tempDir) {
+  ensureFixtureInputs(fixtureDir);
+
+  const outputPaths = prepareFixtureWorkspace(context, fixtureDir, tempDir);
+  const commandPlan = parseFixturePlan(
+    fixtureDir,
+    outputPaths.commandPath,
+    context.commandName,
+    context.interactive
+  );
+
+  return { fixtureDir, commandPlan, outputPaths };
+}
+
+export async function runFixtureCommand(commandPlan, workspaceDir) {
+  return commandPlan.interactive
+    ? runInteractiveCommand(commandPlan, workspaceDir)
+    : runNonInteractiveCommand(commandPlan, workspaceDir);
+}
+
+export function assertFixtureResult({ fixtureDir, commandPlan, outputPaths, result }) {
+  writeCommandOutputs(fixtureDir, outputPaths, result);
+  assertExitCode(commandPlan, result);
+  assertOutputFiles(fixtureDir, outputPaths);
+}
+
+function runNonInteractiveCommand(commandPlan, workspaceDir) {
   const completed = spawnSync(commandPlan.command[0], commandPlan.command.slice(1), {
-    cwd: outputPaths.workspaceDir,
+    cwd: workspaceDir,
     encoding: 'utf8',
   });
 
@@ -98,18 +115,25 @@ function runNonInteractiveCommand(commandPlan, outputPaths) {
   };
 }
 
-async function runInteractiveCommand(commandPlan, outputPaths) {
-  const child = spawnInteractiveProcess(commandPlan, outputPaths.workspaceDir);
+async function runInteractiveCommand(commandPlan, workspaceDir) {
+  const child = spawnInteractiveProcess(commandPlan, workspaceDir);
   const closePromise = waitForChildClose(child);
   const output = collectChildOutput(child);
   const aborted = await applyInteractiveInstructions(child, commandPlan, output);
   const timedOut = await finishInteractiveProcess(child, aborted);
   const closeDetails = await closePromise;
 
-  return createInteractiveResult(output, closeDetails, aborted, timedOut);
+  return {
+    stdout: output.stdout,
+    stderr: output.stderr,
+    exitCode: closeDetails.code,
+    signalCode: closeDetails.signal,
+    aborted,
+    timedOut,
+  };
 }
 
-function validateCommandResult(result, commandPlan) {
+function assertExitCode(commandPlan, result) {
   if (result.timedOut) {
     const lastInstruction = commandPlan.instructions.at(-1);
     const lineNumber = lastInstruction?.lineNumber ?? 1;
@@ -129,7 +153,7 @@ function validateCommandResult(result, commandPlan) {
   }
 }
 
-function assertFixtureOutputs(fixtureDir, outputPaths) {
+function assertOutputFiles(fixtureDir, outputPaths) {
   runDiff(path.join(fixtureDir, 'stdout.txt'), outputPaths.stdoutPath);
 
   const expectedStderrPath = path.join(fixtureDir, 'stderr.txt');
@@ -220,6 +244,7 @@ function parseFixturePlan(fixtureDir, commandPath, commandName, interactive) {
     stdinPath,
     command,
     instructions,
+    interactive,
   };
 }
 
@@ -232,11 +257,15 @@ function normalizeFixturePaths(value, workspaceDir, fixtureDir) {
   return value.split(workspaceDir).join(fixtureDir);
 }
 
+function getWorkspaceRoot(moduleUrl) {
+  return path.dirname(fileURLToPath(moduleUrl));
+}
+
 function getTestsPath(argv) {
   const targetPath = argv[2];
 
   if (!targetPath) {
-    throw new Error('Usage: node run-test.ts path/to/tests/folder');
+    throw new Error('Usage: node run-test.mjs path/to/tests/folder');
   }
 
   return path.resolve(targetPath);
@@ -483,17 +512,6 @@ async function finishInteractiveProcess(child, aborted) {
   return true;
 }
 
-function createInteractiveResult(output, closeDetails, aborted, timedOut) {
-  return {
-    stdout: output.stdout,
-    stderr: output.stderr,
-    exitCode: closeDetails.code,
-    signalCode: closeDetails.signal,
-    aborted,
-    timedOut,
-  };
-}
-
 async function waitForOutputToSettle(child, getLength) {
   let previousLength = getLength();
   let idleDeadline = Date.now() + OUTPUT_IDLE_TIMEOUT_MS;
@@ -640,13 +658,6 @@ function handleFatalError(error) {
   process.exit(1);
 }
 
-module.exports = {
-  __test: {
-    createContext,
-    getActualExitCode,
-    getCommandPath,
-    parseInvocation,
-    readExpectedExitCode,
-    stripInlineComment,
-  },
-};
+if (import.meta.main) {
+  main().catch(handleFatalError);
+}

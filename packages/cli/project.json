@@ -30,7 +30,7 @@
           "cargo build --manifest-path ../core/Cargo.toml --target-dir ../../dist/target/core",
           "cp ../../dist/target/core/debug/openspec-difftool ./bin/openspec-difftool",
           "go build -o ./bin/openspec-diff ./cmd/openspec-diff",
-          "node ../../run-test.ts ./tests"
+          "node ../../run-test.mjs ./tests"
         ]
       }
     }
