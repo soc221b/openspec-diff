@@ -75,14 +75,15 @@ func parsePositionalArgs(args []string) (string, string, error) {
 		}
 		return positionalArgs[0], "all", nil
 	}
-	if len(positionalArgs) == 0 {
-		return "", "", nil
-	}
-	if len(positionalArgs) == 1 {
-		return positionalArgs[0], "", nil
-	}
 
-	return positionalArgs[0], positionalArgs[1], nil
+	switch len(positionalArgs) {
+	case 0:
+		return "", "", nil
+	case 1:
+		return positionalArgs[0], "", nil
+	default:
+		return positionalArgs[0], positionalArgs[1], nil
+	}
 }
 
 func runCommand(ctx context.Context, dir string, name string, args ...string) error {

@@ -160,12 +160,12 @@ fn preprocess_change_spec(
             }
         })?;
 
+    let (stdout, stderr) = archive_output_text(&output);
+
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
-        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
         let details = archive_output_details(
-            &stdout,
-            &stderr,
+            stdout.as_str(),
+            stderr.as_str(),
             &format!("openspec archive exited with status {}", output.status),
         );
         return Err(format!(
@@ -174,12 +174,10 @@ fn preprocess_change_spec(
         ));
     }
 
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
-    if archive_aborted_without_writing(&stdout, &stderr) {
+    if archive_aborted_without_writing(stdout.as_str(), stderr.as_str()) {
         let details = archive_output_details(
-            &stdout,
-            &stderr,
+            stdout.as_str(),
+            stderr.as_str(),
             "openspec archive aborted: no files were changed",
         );
         return Err(format!(
@@ -215,6 +213,13 @@ fn archive_output_details(stdout: &str, stderr: &str, fallback: &str) -> String 
     } else {
         fallback.to_owned()
     }
+}
+
+fn archive_output_text(output: &std::process::Output) -> (String, String) {
+    (
+        String::from_utf8_lossy(&output.stdout).trim().to_owned(),
+        String::from_utf8_lossy(&output.stderr).trim().to_owned(),
+    )
 }
 
 fn copy_file(source: &Path, target: &Path) -> Result<(), String> {
