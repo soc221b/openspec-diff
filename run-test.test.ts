@@ -93,7 +93,7 @@ function createAssertionDirectory({
   return directoryPath;
 }
 
-test('runFixtureCommand writes real stdout, stderr, and exit code files and returns the temp directory path', async () => {
+test('runFixtureCommand writes the final visible stdout, stderr, and exit code files and returns the temp directory path', async () => {
   const { workspaceRoot, fixtureDir } = createCliFixtureWorkspace({
     prefix: 'run-test-command-',
     fixtureName: 'command-fixture',
@@ -101,7 +101,7 @@ test('runFixtureCommand writes real stdout, stderr, and exit code files and retu
       '#!/usr/bin/env node',
       'process.stdin.resume();',
       'process.stdin.on("data", () => {});',
-      'process.stdin.on("end", () => { process.stdout.write("\\u001b[Jout"); process.stderr.write("err"); process.exit(3); });',
+      'process.stdin.on("end", () => { process.stdout.write("first\\nsecond\\n\\u001b[2A\\u001b[Jout"); process.stderr.write("err"); process.exit(3); });',
     ],
     stdin: 'openspec-diff\ninput\n',
   });
@@ -117,7 +117,7 @@ test('runFixtureCommand writes real stdout, stderr, and exit code files and retu
 
     assert.equal(typeof result.path, 'string');
     assert.deepEqual(readOutputDirectory(result.path), {
-      stdout: '\u001b[Jout',
+      stdout: 'out',
       stderr: 'err',
       exitCode: '3',
     });

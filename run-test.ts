@@ -300,8 +300,8 @@ async function runInteractiveCommand(
   const closeDetails = await closePromise;
 
   return {
-    stdout: output.stdout,
-    stderr: output.stderr,
+    stdout: renderTerminalOutput(output.stdout),
+    stderr: renderTerminalOutput(output.stderr),
     exitCode: closeDetails.code,
     signalCode: closeDetails.signal,
     aborted,
@@ -644,6 +644,167 @@ function collectChildOutput(child: ReturnType<typeof spawn>) {
   });
 
   return output;
+}
+
+function renderTerminalOutput(raw: string) {
+  if (!raw.includes('\u001b[') && !raw.includes('\r')) {
+    return raw;
+  }
+
+  const lines = [''];
+  const cursor = { row: 0, column: 0 };
+  let index = 0;
+
+  while (index < raw.length) {
+    const controlSequence = matchControlSequence(raw, index);
+
+    if (controlSequence) {
+      applyControlSequence(lines, cursor, controlSequence);
+      index = controlSequence.nextIndex;
+      continue;
+    }
+
+    const char = raw[index];
+
+    if (char === '\n') {
+      cursor.row += 1;
+      cursor.column = 0;
+      ensureScreenLine(lines, cursor.row);
+      index += 1;
+      continue;
+    }
+
+    if (char === '\r') {
+      cursor.column = 0;
+      index += 1;
+      continue;
+    }
+
+    writeScreenCharacter(lines, cursor, char);
+    index += 1;
+  }
+
+  while (lines.length > 0 && lines.at(-1) === '') {
+    lines.pop();
+  }
+
+  return lines.join('\n');
+}
+
+function matchControlSequence(raw: string, index: number) {
+  const match = raw.slice(index).match(/^\u001b\[([0-9;?]*)([A-Za-z])/);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    command: match[2],
+    params: match[1],
+    nextIndex: index + match[0].length,
+  };
+}
+
+function applyControlSequence(
+  lines: string[],
+  cursor: { row: number; column: number },
+  controlSequence: { command: string; params: string; nextIndex: number }
+) {
+  const params = parseControlSequenceParams(controlSequence.params);
+
+  switch (controlSequence.command) {
+    case 'A':
+      cursor.row = Math.max(0, cursor.row - getControlSequenceCount(params));
+      break;
+    case 'B':
+      cursor.row += getControlSequenceCount(params);
+      ensureScreenLine(lines, cursor.row);
+      break;
+    case 'C':
+      cursor.column += getControlSequenceCount(params);
+      break;
+    case 'D':
+      cursor.column = Math.max(0, cursor.column - getControlSequenceCount(params));
+      break;
+    case 'H':
+    case 'f':
+      cursor.row = Math.max(0, (params[0] ?? 1) - 1);
+      cursor.column = Math.max(0, (params[1] ?? 1) - 1);
+      ensureScreenLine(lines, cursor.row);
+      break;
+    case 'J':
+      eraseDisplay(lines, cursor, params[0] ?? 0);
+      break;
+    case 'K':
+      eraseLine(lines, cursor, params[0] ?? 0);
+      break;
+    case 'm':
+      break;
+    default:
+      break;
+  }
+}
+
+function parseControlSequenceParams(params: string) {
+  if (params === '') {
+    return [0];
+  }
+
+  return params.split(';').map((value) => {
+    const parsed = Number.parseInt(value.replace(/\?/g, ''), 10);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  });
+}
+
+function getControlSequenceCount(params: number[]) {
+  const value = params[0] ?? 0;
+  return value === 0 ? 1 : value;
+}
+
+function eraseDisplay(lines: string[], cursor: { row: number; column: number }, mode: number) {
+  ensureScreenLine(lines, cursor.row);
+
+  if (mode === 2) {
+    lines.splice(0, lines.length, '');
+    cursor.row = 0;
+    cursor.column = 0;
+    return;
+  }
+
+  lines[cursor.row] = lines[cursor.row].slice(0, cursor.column);
+  lines.splice(cursor.row + 1);
+}
+
+function eraseLine(lines: string[], cursor: { row: number; column: number }, mode: number) {
+  ensureScreenLine(lines, cursor.row);
+
+  if (mode === 2) {
+    lines[cursor.row] = '';
+    cursor.column = 0;
+    return;
+  }
+
+  lines[cursor.row] = lines[cursor.row].slice(0, cursor.column);
+}
+
+function writeScreenCharacter(lines: string[], cursor: { row: number; column: number }, char: string) {
+  ensureScreenLine(lines, cursor.row);
+  const line = lines[cursor.row];
+  const paddedLine = line.length < cursor.column ? `${line}${' '.repeat(cursor.column - line.length)}` : line;
+
+  if (cursor.column < paddedLine.length) {
+    lines[cursor.row] = `${paddedLine.slice(0, cursor.column)}${char}${paddedLine.slice(cursor.column + 1)}`;
+  } else {
+    lines[cursor.row] = `${paddedLine}${char}`;
+  }
+
+  cursor.column += 1;
+}
+
+function ensureScreenLine(lines: string[], row: number) {
+  while (lines.length <= row) {
+    lines.push('');
+  }
 }
 
 async function applyInteractiveInstructions(

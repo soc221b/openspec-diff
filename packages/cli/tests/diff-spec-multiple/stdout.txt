@@ -1,22 +1,4 @@
 ? Select specs to diff
-❯ ◯ auth
-  ◯ shipping
-  ◯ transaction
-
-↑↓ navigate • space toggle • ⏎ submit
-[6A[J? Select specs to diff
-❯ ◉ auth
-  ◯ shipping
-  ◯ transaction
-
-↑↓ navigate • space toggle • ⏎ submit
-[6A[J? Select specs to diff
-  ◉ auth
-❯ ◯ shipping
-  ◯ transaction
-
-↑↓ navigate • space toggle • ⏎ submit
-[6A[J? Select specs to diff
   ◉ auth
 ❯ ◉ shipping
   ◯ transaction
