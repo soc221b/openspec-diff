@@ -1,13 +1,13 @@
 # Auth Specification
 
 ## Purpose
-This specification describes how customers sign in to reach protected product areas.
+Lorem ipsum
 
 ## Requirements
 
-### Requirement: The system SHALL let a customer sign in with a verified account
-The system SHALL let a customer sign in with a verified account.
+### Requirement: Password sign-in
+The system SHALL support password sign-in.
 
-#### Scenario: A signed-in customer opens the account area
-- **WHEN** a customer signs in with valid credentials
-- **THEN** the account area is shown
+#### Scenario: Lorem ipsum
+- **WHEN** lorem ipsum
+- **THEN** lorem ipsum
