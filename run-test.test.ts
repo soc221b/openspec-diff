@@ -72,13 +72,15 @@ function createAssertionDirectory({
   exitCode,
 }: {
   prefix: string;
-  stdout: string;
+  stdout?: string;
   stderr?: string;
   exitCode?: string;
 }) {
   const directoryPath = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 
-  fs.writeFileSync(path.join(directoryPath, 'stdout.txt'), stdout, 'utf8');
+  if (stdout !== undefined) {
+    fs.writeFileSync(path.join(directoryPath, 'stdout.txt'), stdout, 'utf8');
+  }
 
   if (stderr !== undefined) {
     fs.writeFileSync(path.join(directoryPath, 'stderr.txt'), stderr, 'utf8');
@@ -302,7 +304,6 @@ test('assertFixtureResult returns exitCode 1 when fixture stdout files differ', 
 test('assertFixtureResult returns exitCode 2 when a compared fixture file does not exist', () => {
   const expectedPath = createAssertionDirectory({
     prefix: 'run-test-assert-missing-expected-',
-    stdout: 'ok\n',
     stderr: 'err\n',
   });
   const actualPath = createAssertionDirectory({
