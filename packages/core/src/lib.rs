@@ -160,7 +160,7 @@ fn preprocess_change_spec(
             }
         })?;
 
-    let (stdout, stderr) = archive_output_text(&output);
+    let (stdout, stderr) = decode_archive_output(&output);
 
     if !output.status.success() {
         let details = archive_output_details(
@@ -215,7 +215,7 @@ fn archive_output_details(stdout: &str, stderr: &str, fallback: &str) -> String 
     }
 }
 
-fn archive_output_text(output: &std::process::Output) -> (String, String) {
+fn decode_archive_output(output: &std::process::Output) -> (String, String) {
     (
         String::from_utf8_lossy(&output.stdout).trim().to_owned(),
         String::from_utf8_lossy(&output.stderr).trim().to_owned(),
