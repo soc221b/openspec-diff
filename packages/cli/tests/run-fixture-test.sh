@@ -39,6 +39,8 @@ command_name = os.path.basename(cli_bin)
 OUTPUT_IDLE_TIMEOUT_SECONDS = 0.2
 OUTPUT_POLL_INTERVAL_SECONDS = 0.01
 MAX_OUTPUT_SETTLE_SECONDS = 1.0
+# The delegated diff process can take a few seconds once real openspec archive
+# validation and preprocessing are involved, so allow a longer final exit wait.
 PROCESS_EXIT_TIMEOUT_SECONDS = 5.0
 
 
