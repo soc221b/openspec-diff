@@ -415,14 +415,40 @@ function stripInlineComment(value) {
 
 function decodeInstruction(value, stdinPath, lineNumber) {
   try {
-    return JSON.parse(`"${escapeForJson(value)}"`);
+    return value.replace(
+      /\\(?:u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|([\\'"abfnrtv]))/g,
+      (match, unicodeHex, asciiHex, escapedChar) => decodeEscape(match, unicodeHex, asciiHex, escapedChar)
+    );
   } catch (error) {
     throw new Error(`${stdinPath}:${lineNumber}: invalid escape sequence in stdin instruction: ${error.message}`);
   }
 }
 
-function escapeForJson(value) {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+function decodeEscape(match, unicodeHex, asciiHex, escapedChar) {
+  if (unicodeHex) {
+    return String.fromCharCode(Number.parseInt(unicodeHex, 16));
+  }
+
+  if (asciiHex) {
+    return String.fromCharCode(Number.parseInt(asciiHex, 16));
+  }
+
+  return getSimpleEscapeMap()[escapedChar] ?? match;
+}
+
+function getSimpleEscapeMap() {
+  return {
+    '\\': '\\',
+    '"': '"',
+    "'": "'",
+    a: '\u0007',
+    b: '\b',
+    f: '\f',
+    n: '\n',
+    r: '\r',
+    t: '\t',
+    v: '\u000b',
+  };
 }
 
 function normalizeOutput(value) {
