@@ -86,7 +86,7 @@ jobs:
         run: npm ci
 
       - name: Install OpenSpec CLI
-        run: npm install -g @fission-ai/openspec@stable || npm install -g @fission-ai/openspec@latest
+        run: npm install -g @fission-ai/openspec@latest
 
       - name: Run tests
         run: npm test
