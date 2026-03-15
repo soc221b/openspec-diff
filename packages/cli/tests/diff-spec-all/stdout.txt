@@ -6,30 +6,16 @@
 ✔ Select specs to diff auth, transaction
 
 Diffing auth/spec.md
-5d4
-< 
-7d5
-< 
-9c7
-< The system SHALL let a customer sign in with a verified account.
----
-> The system SHALL let a customer sign in with a verified account before opening a saved digital wallet.
-13c11,12
-< - **THEN** the account area is shown
----
-> - **THEN** the account area is shown with access to saved wallet details
-> 
+5,9d4
+< ### Requirement: Single sign-on
+< Lorem ipsum SHALL dolor sit amet
+< #### Scenario: Lorem ipsum
+< - **WHEN** lorem ipsum
+< - **THEN** lorem ipsum
 Diffing transaction/spec.md
-5d4
-< 
-7d5
-< 
-9c7
-< The system SHALL record each completed purchase.
----
-> The system SHALL record each completed purchase with the selected digital wallet funding source.
-13c11,12
-< - **THEN** the purchase details are shown
----
-> - **THEN** the purchase details are shown with the wallet funding source
-> 
+5,9d4
+< ### Requirement: Transaction history
+< Lorem ipsum SHALL dolor sit amet
+< #### Scenario: Lorem ipsum
+< - **WHEN** lorem ipsum
+< - **THEN** lorem ipsum

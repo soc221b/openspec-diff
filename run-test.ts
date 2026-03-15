@@ -87,6 +87,7 @@ async function runInteractiveCommand(commandPlan, outputPaths) {
     detached: true,
     stdio: ['pipe', 'pipe', 'pipe'],
   });
+  const closePromise = waitForChildClose(child);
 
   child.stdout.setEncoding('utf8');
   child.stderr.setEncoding('utf8');
@@ -129,7 +130,7 @@ async function runInteractiveCommand(commandPlan, outputPaths) {
     }
   }
 
-  const closeDetails = await waitForChildClose(child);
+  const closeDetails = await closePromise;
 
   return {
     stdout,
@@ -300,14 +301,9 @@ function ensurePathExists(targetPath) {
 
 function ensureFixtureInputs(fixtureDir) {
   const stdinPath = path.join(fixtureDir, 'stdin.txt');
-  const exitCodePath = path.join(fixtureDir, 'exit-code.txt');
 
   if (!fs.existsSync(stdinPath)) {
     throw new Error(`Missing required stdin fixture: ${stdinPath}`);
-  }
-
-  if (!fs.existsSync(exitCodePath)) {
-    throw new Error(`Missing required exit code fixture: ${exitCodePath}`);
   }
 }
 
@@ -579,6 +575,11 @@ function runDiff(expectedPath, actualPath) {
 
 function readExpectedExitCode(fixtureDir) {
   const exitCodePath = path.join(fixtureDir, 'exit-code.txt');
+
+  if (!fs.existsSync(exitCodePath)) {
+    return 0;
+  }
+
   const value = fs.readFileSync(exitCodePath, 'utf8').trim();
 
   if (!/^(0|[1-9]\d*)$/.test(value)) {

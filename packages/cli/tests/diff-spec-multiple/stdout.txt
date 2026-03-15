@@ -7,30 +7,16 @@
 ✔ Select specs to diff auth, shipping
 
 Diffing auth/spec.md
-5d4
-< 
-7d5
-< 
-9c7
-< The system SHALL let a customer sign in with a verified account.
----
-> The system SHALL let a customer sign in with a verified account before opening the order tracking portal.
-13c11,12
-< - **THEN** the account area is shown
----
-> - **THEN** the account area is shown with access to the order tracking portal
-> 
+5,9d4
+< ### Requirement: Single sign-on
+< Lorem ipsum SHALL dolor sit amet
+< #### Scenario: Lorem ipsum
+< - **WHEN** lorem ipsum
+< - **THEN** lorem ipsum
 Diffing shipping/spec.md
-5d4
-< 
-7d5
-< 
-9c7
-< The system SHALL show shipment progress.
----
-> The system SHALL show shipment progress with real-time carrier updates.
-13c11,12
-< - **THEN** the current shipment progress is shown
----
-> - **THEN** the current shipment progress is shown with the latest carrier update
-> 
+5,9d4
+< ### Requirement: Order tracking
+< Lorem ipsum SHALL dolor sit amet
+< #### Scenario: Lorem ipsum
+< - **WHEN** lorem ipsum
+< - **THEN** lorem ipsum

@@ -1,14 +1,7 @@
 Diffing transaction/spec.md
-5d4
-< 
-7d5
-< 
-9c7
-< The system SHALL record each completed purchase.
----
-> The system SHALL record each completed purchase with the selected digital wallet funding source.
-13c11,12
-< - **THEN** the purchase details are shown
----
-> - **THEN** the purchase details are shown with the wallet funding source
-> 
+5,9d4
+< ### Requirement: Transaction history
+< Lorem ipsum SHALL dolor sit amet
+< #### Scenario: Lorem ipsum
+< - **WHEN** lorem ipsum
+< - **THEN** lorem ipsum
