@@ -2,6 +2,6 @@
 ## ADDED Requirements
 ### Requirement: Single sign-on
 The system SHALL support single sign-on.
-#### Scenario: Loren ipsum
+#### Scenario: Lorem ipsum
 - **WHEN** lorem ipsum
 - **THEN** lorem ipsum
