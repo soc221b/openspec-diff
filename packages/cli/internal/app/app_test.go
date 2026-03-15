@@ -41,3 +41,14 @@ func TestReadPromptInputTreatsIncompleteEscapeSequenceAsEOF(t *testing.T) {
 		t.Fatalf("expected EOF input, got %v", input.kind)
 	}
 }
+
+func TestReadPromptInputRecognizesSpaceAsToggle(t *testing.T) {
+	input, err := readPromptInput(bufio.NewReader(strings.NewReader(" ")))
+	if err != nil {
+		t.Fatalf("readPromptInput returned error: %v", err)
+	}
+
+	if input.kind != promptInputToggle {
+		t.Fatalf("expected toggle input, got %v", input.kind)
+	}
+}

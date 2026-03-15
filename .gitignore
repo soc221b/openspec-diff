@@ -1,6 +1,7 @@
 node_modules/
 dist/
 packages/core/Cargo.lock
+packages/*/target/
 packages/*/bin/
 packages/*/dist/
 

@@ -183,6 +183,8 @@ func selectChange(stdin io.Reader, stdout io.Writer, changes []string) (string, 
 			return resolveSelection(stdout, changes, selectedIndex, typedSelection.String(), true)
 		case promptInputSubmit:
 			return resolveSelection(stdout, changes, selectedIndex, typedSelection.String(), false)
+		case promptInputToggle:
+			typedSelection.WriteByte(' ')
 		case promptInputMoveUp:
 			if selectedIndex > 0 {
 				selectedIndex--
@@ -307,7 +309,7 @@ func readPromptInput(reader *bufio.Reader) (promptInput, error) {
 	case '\r', '\n':
 		return promptInput{kind: promptInputSubmit}, nil
 	case ' ':
-		return promptInput{kind: promptInputToggle, text: " "}, nil
+		return promptInput{kind: promptInputToggle}, nil
 	case '\x1b':
 		return readPromptEscapeSequence(reader, input)
 	default:
