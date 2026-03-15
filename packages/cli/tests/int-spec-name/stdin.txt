@@ -1,2 +1,2 @@
-openspec-diff two-specs
+openspec-diff digital-wallet
 ^C # abort, in order to capture the default prompt

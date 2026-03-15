@@ -1,5 +1,7 @@
-Diffing capability-b/spec.md
-1c1
-< # main capability b
----
-> # changed capability b
+Diffing transaction/spec.md
+5,9d4
+< ### Requirement: Transaction history
+< Lorem ipsum SHALL dolor sit amet
+< #### Scenario: Lorem ipsum
+< - **WHEN** lorem ipsum
+< - **THEN** lorem ipsum

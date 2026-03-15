@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/soc221b/openspec-diff/packages/cli/internal/app"
@@ -32,7 +34,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := app.Run(context.Background(), os.Stdin, os.Stdout, ".", changeName, specName, runCommand); err != nil {
+	if err := app.Run(context.Background(), os.Stdin, os.Stdout, ".", changeName, specName, coreDiffCommand(), runCommand); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -99,4 +101,18 @@ func runCommand(ctx context.Context, dir string, name string, args ...string) er
 	}
 
 	return nil
+}
+
+func coreDiffCommand() string {
+	executablePath, err := os.Executable()
+	if err != nil {
+		return "openspec-difftool"
+	}
+
+	commandName := "openspec-difftool"
+	if runtime.GOOS == "windows" {
+		commandName += ".exe"
+	}
+
+	return filepath.Join(filepath.Dir(executablePath), commandName)
 }

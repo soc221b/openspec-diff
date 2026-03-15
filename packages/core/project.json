@@ -24,7 +24,12 @@
       "outputs": ["{workspaceRoot}/dist/target/core"],
       "options": {
         "cwd": "packages/core",
-        "command": "cargo test --target-dir ../../dist/target/core"
+        "parallel": false,
+        "commands": [
+          "npm install -g @fission-ai/openspec@latest",
+          "cargo build --target-dir ../../dist/target/core",
+          "node ../../run-test.ts ./tests"
+        ]
       }
     }
   }

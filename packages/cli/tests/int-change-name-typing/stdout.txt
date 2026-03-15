@@ -1,12 +1,14 @@
 ? Select a change to diff
-❯ alpha-change
-  beta-change
+❯ digital-wallet
+  single-sign-on
 
 ↑↓ navigate • ⏎ select
-✔ Select a change to diff beta-change
+✔ Select a change to diff single-sign-on
 
-Diffing capability-stdin/spec.md
-1c1
-< # main stdin capability
----
-> # changed stdin capability
+Diffing auth/spec.md
+5,9d4
+< ### Requirement: Single sign-on
+< Lorem ipsum SHALL dolor sit amet
+< #### Scenario: Lorem ipsum
+< - **WHEN** lorem ipsum
+< - **THEN** lorem ipsum

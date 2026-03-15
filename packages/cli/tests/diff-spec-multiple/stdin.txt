@@ -1,4 +1,4 @@
-openspec-diff three-specs
+openspec-diff order-tracking-portal
 \x20 # select the first spec
 \033[B # navigate to the second spec
 \x20 # select the second spec

@@ -1,9 +1,0 @@
-? Select a change to diff
-❯ new-spec
-
-↑↓ navigate • ⏎ select
-✔ Select a change to diff new-spec
-
-Diffing capability-new/spec.md
-0a1
-> # capability new spec

@@ -1,0 +1,1 @@
+openspec-difftool ./openspec/specs/auth/spec.md ./openspec/changes/single-sign-on/specs/auth/spec.md

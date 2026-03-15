@@ -1,2 +1,2 @@
 openspec-diff
-beta-change\n # \n submits the named change
+single-sign-on\n # \n submits the named change

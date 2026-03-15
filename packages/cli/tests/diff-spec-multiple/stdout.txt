@@ -1,18 +1,22 @@
 ? Select specs to diff
-  ◉ capability-a
-❯ ◉ capability-b
-  ◯ capability-c
+  ◉ auth
+❯ ◉ shipping
+  ◯ transaction
 
 ↑↓ navigate • space toggle • ⏎ submit
-✔ Select specs to diff capability-a, capability-b
+✔ Select specs to diff auth, shipping
 
-Diffing capability-a/spec.md
-1c1
-< # main capability a
----
-> # changed capability a
-Diffing capability-b/spec.md
-1c1
-< # main capability b
----
-> # changed capability b
+Diffing auth/spec.md
+5,9d4
+< ### Requirement: Single sign-on
+< Lorem ipsum SHALL dolor sit amet
+< #### Scenario: Lorem ipsum
+< - **WHEN** lorem ipsum
+< - **THEN** lorem ipsum
+Diffing shipping/spec.md
+5,9d4
+< ### Requirement: Order tracking
+< Lorem ipsum SHALL dolor sit amet
+< #### Scenario: Lorem ipsum
+< - **WHEN** lorem ipsum
+< - **THEN** lorem ipsum

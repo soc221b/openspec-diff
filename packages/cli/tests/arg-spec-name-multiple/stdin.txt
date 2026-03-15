@@ -1,1 +1,1 @@
-openspec-diff three-specs capability-a,capability-c
+openspec-diff order-tracking-portal auth,shipping

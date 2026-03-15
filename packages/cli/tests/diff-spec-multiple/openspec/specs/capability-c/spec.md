@@ -1,1 +1,0 @@
-# main capability c

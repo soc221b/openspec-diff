@@ -6,7 +6,7 @@
   "scripts": {
     "build": "nx run-many -t build",
     "format": "nx run-many -t format",
-    "test": "nx run-many -t test"
+    "test": "nx run-many -t test --parallel=1"
   },
   "workspaces": [
     "packages/vscode-extension"

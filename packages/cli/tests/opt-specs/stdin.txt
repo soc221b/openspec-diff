@@ -1,1 +1,1 @@
-openspec-diff --specs two-specs
+openspec-diff --specs digital-wallet
