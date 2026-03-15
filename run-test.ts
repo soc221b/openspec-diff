@@ -747,7 +747,7 @@ function applyControlSequence(
 
 function parseControlSequenceParams(params: string) {
   if (params === '') {
-    return [0];
+    return [];
   }
 
   return params.split(';').map((value) => {
@@ -764,6 +764,15 @@ function getControlSequenceCount(params: number[]) {
 function eraseDisplay(lines: string[], cursor: { row: number; column: number }, mode: number) {
   ensureScreenLine(lines, cursor.row);
 
+  if (mode === 1) {
+    for (let index = 0; index < cursor.row; index += 1) {
+      lines[index] = '';
+    }
+
+    lines[cursor.row] = `${' '.repeat(cursor.column)}${lines[cursor.row].slice(cursor.column)}`;
+    return;
+  }
+
   if (mode === 2) {
     lines.splice(0, lines.length, '');
     cursor.row = 0;
@@ -778,6 +787,11 @@ function eraseDisplay(lines: string[], cursor: { row: number; column: number }, 
 function eraseLine(lines: string[], cursor: { row: number; column: number }, mode: number) {
   ensureScreenLine(lines, cursor.row);
 
+  if (mode === 1) {
+    lines[cursor.row] = `${' '.repeat(cursor.column)}${lines[cursor.row].slice(cursor.column)}`;
+    return;
+  }
+
   if (mode === 2) {
     lines[cursor.row] = '';
     cursor.column = 0;
@@ -790,7 +804,8 @@ function eraseLine(lines: string[], cursor: { row: number; column: number }, mod
 function writeScreenCharacter(lines: string[], cursor: { row: number; column: number }, char: string) {
   ensureScreenLine(lines, cursor.row);
   const line = lines[cursor.row];
-  const paddedLine = line.length < cursor.column ? `${line}${' '.repeat(cursor.column - line.length)}` : line;
+  const padding = line.length < cursor.column ? ' '.repeat(cursor.column - line.length) : '';
+  const paddedLine = `${line}${padding}`;
 
   if (cursor.column < paddedLine.length) {
     lines[cursor.row] = `${paddedLine.slice(0, cursor.column)}${char}${paddedLine.slice(cursor.column + 1)}`;
