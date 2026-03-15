@@ -1,13 +1,8 @@
-5d4
-< 
-7,14d5
-< 
+5,9d4
 < ### Requirement: Single sign-on
 < Lorem ipsum SHALL lorem ipsum.
-< 
 < #### Scenario: A customer completes single sign-on
 < - **WHEN** lorem ipsum
 < - **THEN** lorem ipsum
-< 
-20a12
+14a10
 > 
