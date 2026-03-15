@@ -5,16 +5,16 @@
 ✔ Select a change to diff new-spec
 
 Diffing capability-new/spec.md
-0a1,12
-> # capability-new Specification
+5d4
+< 
+7d5
+< 
+13a12,19
 > 
-> ## Purpose
-> TBD - created by archiving change new-spec. Update Purpose after archive.
-> ## Requirements
-> ### Requirement: The system SHALL support capability-new
-> The system SHALL support capability-new.
+> ### Requirement: The system SHALL support added capability-new behavior
+> The system SHALL support added capability-new behavior.
 > 
-> #### Scenario: Capability New is requested
-> - **WHEN** capability-new is requested
-> - **THEN** capability-new is available
+> #### Scenario: Added capability New behavior is requested
+> - **WHEN** added capability-new behavior is requested
+> - **THEN** added capability-new behavior is available
 > 

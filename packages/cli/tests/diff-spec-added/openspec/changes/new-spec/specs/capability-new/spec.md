@@ -2,9 +2,9 @@
 
 ## ADDED Requirements
 
-### Requirement: The system SHALL support capability-new
-The system SHALL support capability-new.
+### Requirement: The system SHALL support added capability-new behavior
+The system SHALL support added capability-new behavior.
 
-#### Scenario: Capability New is requested
-- **WHEN** capability-new is requested
-- **THEN** capability-new is available
+#### Scenario: Added capability New behavior is requested
+- **WHEN** added capability-new behavior is requested
+- **THEN** added capability-new behavior is available
