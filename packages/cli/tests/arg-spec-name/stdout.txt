@@ -4,8 +4,11 @@ Diffing transaction/spec.md
 7d5
 < 
 9c7
-< The system SHALL record each completed purchase with consistent totals, payment status, and a readable history entry.
+< The system SHALL record each completed purchase.
 ---
-> The system SHALL record each completed purchase with clearer payment status details and a more dependable history entry.
-13a12
+> The system SHALL record each completed purchase with the selected digital wallet funding source.
+13c11,12
+< - **THEN** the purchase details are shown
+---
+> - **THEN** the purchase details are shown with the wallet funding source
 > 

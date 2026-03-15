@@ -1,13 +1,13 @@
 # auth Specification
 
 ## Purpose
-This specification describes how sign-in protects access to private customer areas.
+This specification describes how customers sign in to reach protected product areas.
 
 ## Requirements
 
-### Requirement: The system SHALL protect account access during sign-in
-The system SHALL protect account access during sign-in.
+### Requirement: The system SHALL let a customer sign in with a verified account
+The system SHALL let a customer sign in with a verified account.
 
-#### Scenario: A customer signs in to a protected area
+#### Scenario: A signed-in customer opens the account area
 - **WHEN** a customer signs in with valid credentials
-- **THEN** the protected account area is shown
+- **THEN** the account area is shown

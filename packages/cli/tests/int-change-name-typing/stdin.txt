@@ -1,2 +1,2 @@
 openspec-diff
-real-time-tracking\n # \n submits the named change
+single-sign-on\n # \n submits the named change

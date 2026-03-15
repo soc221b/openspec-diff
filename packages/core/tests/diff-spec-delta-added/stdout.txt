@@ -4,10 +4,10 @@
 < 
 13a12,19
 > 
-> ### Requirement: The system SHALL offer passwordless sign-in links for returning customers who choose a faster sign-in path
-> The system SHALL offer passwordless sign-in links for returning customers who choose a faster sign-in path.
+> ### Requirement: The system SHALL offer single sign-on as a sign-in option
+> The system SHALL offer single sign-on as a sign-in option.
 > 
-> #### Scenario: A returning customer requests a passwordless link
-> - **WHEN** a returning customer asks for a passwordless sign-in link
-> - **THEN** a secure sign-in link is issued
+> #### Scenario: A customer starts single sign-on
+> - **WHEN** a customer chooses the single sign-on button
+> - **THEN** the single sign-on flow begins
 > 

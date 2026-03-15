@@ -4,13 +4,13 @@ Diffing auth/spec.md
 7d5
 < 
 9c7
-< The system SHALL let a customer sign in with a verified account and reach protected features without unnecessary friction.
+< The system SHALL let a customer sign in with a verified account.
 ---
-> The system SHALL let a customer sign in with stronger session checks while keeping protected features easy to reach.
+> The system SHALL let a customer sign in with a verified account before opening the order tracking portal.
 13c11,12
 < - **THEN** the account area is shown
 ---
-> - **THEN** the account area is shown after stronger session checks
+> - **THEN** the account area is shown with access to the order tracking portal
 > 
 Diffing shipping/spec.md
 5d4
@@ -18,11 +18,11 @@ Diffing shipping/spec.md
 7d5
 < 
 9c7
-< The system SHALL present clear shipment progress so a customer can understand where an order is in transit.
+< The system SHALL show shipment progress.
 ---
-> The system SHALL present shipment progress with more timely tracking details so a customer can follow delivery changes clearly.
+> The system SHALL show shipment progress with real-time carrier updates.
 13c11,12
-< - **THEN** the current shipment progress is shown clearly
+< - **THEN** the current shipment progress is shown
 ---
-> - **THEN** the current shipment progress is shown with fresher detail
+> - **THEN** the current shipment progress is shown with the latest carrier update
 > 

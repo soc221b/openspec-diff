@@ -1,13 +1,13 @@
 # auth Specification
 
 ## Purpose
-This specification describes the older account recovery gate that appears before account access is granted.
+This specification describes an older sign-in rule that still appears in legacy accounts.
 
 ## Requirements
 
-### Requirement: The system SHALL require a legacy recovery phrase before showing the account area
-The system SHALL require a legacy recovery phrase before showing the account area.
+### Requirement: The system SHALL let a customer sign in with a one-time recovery code
+The system SHALL let a customer sign in with a one-time recovery code.
 
-#### Scenario: A customer signs in with a legacy recovery phrase
-- **WHEN** a customer submits a legacy recovery phrase during sign-in
-- **THEN** the account area is shown after the legacy recovery phrase is accepted
+#### Scenario: A customer signs in with a recovery code
+- **WHEN** a customer enters a valid one-time recovery code
+- **THEN** the account area is shown

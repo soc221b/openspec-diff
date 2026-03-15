@@ -2,8 +2,8 @@
 < 
 7,8c6
 < 
-< ### Requirement: The system SHALL protect account access during sign-in
+< ### Requirement: The system SHALL let a customer sign in with a verified account
 ---
-> ### Requirement: The system SHALL protect account access during sign-in and reauthentication
+> ### Requirement: The system SHALL let a customer sign in with a verified account through single sign-on
 13a12
 > 
