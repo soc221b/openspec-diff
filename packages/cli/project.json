@@ -23,8 +23,9 @@
       "executor": "nx:run-commands",
       "options": {
         "cwd": "packages/cli",
+        "parallel": false,
         "commands": [
-          "if ! command -v openspec >/dev/null 2>&1; then npm install -g @fission-ai/openspec@latest; fi",
+          "npm install -g @fission-ai/openspec@latest",
           "mkdir -p ./bin",
           "cargo build --manifest-path ../core/Cargo.toml --target-dir ../../dist/target/core",
           "cp ../../dist/target/core/debug/openspec-difftool ./bin/openspec-difftool",
