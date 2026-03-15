@@ -343,36 +343,16 @@ function getInstructionLines(stdinPath) {
 function parseInvocation(value, stdinPath, lineNumber) {
   const tokens = [];
   let current = '';
-  let escaped = false;
-  let quote = null;
+  const scanner = createShellScanner();
 
   for (const char of value) {
-    if (escaped) {
-      current += char;
-      escaped = false;
+    const scanned = scanShellCharacter(scanner, char);
+
+    if (scanned.char === null) {
       continue;
     }
 
-    if (char === '\\' && quote !== "'") {
-      escaped = true;
-      continue;
-    }
-
-    if (quote) {
-      if (char === quote) {
-        quote = null;
-      } else {
-        current += char;
-      }
-      continue;
-    }
-
-    if (char === '"' || char === "'") {
-      quote = char;
-      continue;
-    }
-
-    if (/\s/.test(char)) {
+    if (!scanned.protected && /\s/.test(scanned.char)) {
       if (current) {
         tokens.push(current);
         current = '';
@@ -380,10 +360,10 @@ function parseInvocation(value, stdinPath, lineNumber) {
       continue;
     }
 
-    current += char;
+    current += scanned.char;
   }
 
-  if (escaped || quote) {
+  if (hasOpenShellToken(scanner)) {
     throw new Error(`${stdinPath}:${lineNumber}: invalid CLI invocation in stdin.txt`);
   }
 
@@ -399,40 +379,53 @@ function parseInvocation(value, stdinPath, lineNumber) {
 }
 
 function stripInlineComment(value) {
-  let escaped = false;
-  let quote = null;
+  const scanner = createShellScanner();
 
   for (let index = 0; index < value.length; index += 1) {
-    const char = value[index];
+    const scanned = scanShellCharacter(scanner, value[index]);
 
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-
-    if (char === '\\') {
-      escaped = true;
-      continue;
-    }
-
-    if (quote) {
-      if (char === quote) {
-        quote = null;
-      }
-      continue;
-    }
-
-    if (char === '"' || char === "'") {
-      quote = char;
-      continue;
-    }
-
-    if (char === '#') {
+    if (!scanned.protected && scanned.char === '#') {
       return value.slice(0, index).trimEnd();
     }
   }
 
   return value.trim();
+}
+
+function createShellScanner() {
+  return { escaped: false, quote: null };
+}
+
+function scanShellCharacter(scanner, char) {
+  if (scanner.escaped) {
+    scanner.escaped = false;
+    return { char, protected: true };
+  }
+
+  if (char === '\\' && scanner.quote !== "'") {
+    scanner.escaped = true;
+    return { char: null, protected: scanner.quote !== null };
+  }
+
+  if (scanner.quote) {
+    if (char === scanner.quote) {
+      scanner.quote = null;
+      return { char: null, protected: true };
+    }
+
+    return { char, protected: true };
+  }
+
+  if (char === '"' || char === "'") {
+    scanner.quote = char;
+    return { char: null, protected: false };
+  }
+
+  return { char, protected: false };
+}
+
+function hasOpenShellToken(scanner) {
+  return scanner.escaped || scanner.quote !== null;
 }
 
 function decodeInstruction(value, stdinPath, lineNumber) {
