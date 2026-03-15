@@ -38,6 +38,22 @@ type specPair struct {
 	mainPath   string
 }
 
+type promptInputKind int
+
+const (
+	promptInputTyped promptInputKind = iota
+	promptInputSubmit
+	promptInputMoveUp
+	promptInputMoveDown
+	promptInputToggle
+	promptInputEOF
+)
+
+type promptInput struct {
+	kind promptInputKind
+	text string
+}
+
 func Run(ctx context.Context, stdin io.Reader, stdout io.Writer, workDir string, changeName string, specName string, coreDiffExecutable string, run CommandRunner) error {
 	repoRoot, err := findRepoRoot(workDir)
 	if err != nil {
@@ -154,80 +170,31 @@ func selectChange(stdin io.Reader, stdout io.Writer, changes []string) (string, 
 	typedSelection := strings.Builder{}
 	rendered := false
 
-	renderPrompt := func() {
-		if rendered {
-			// Move the cursor back to the top of the prompt and clear it before
-			// redrawing with the updated selection marker.
-			_, _ = fmt.Fprintf(stdout, "\x1b[%dA\x1b[J", len(changes)+promptOverhead)
-		}
-
-		_, _ = fmt.Fprintln(stdout, "? Select a change to diff")
-		for index, change := range changes {
-			prefix := " "
-			if index == selectedIndex {
-				prefix = "❯"
-			}
-			_, _ = fmt.Fprintf(stdout, "%s %s\n", prefix, change)
-		}
-		_, _ = fmt.Fprintln(stdout)
-		_, _ = fmt.Fprintln(stdout, "↑↓ navigate • ⏎ select")
-		rendered = true
-	}
-
-	renderPrompt()
+	renderSingleSelectionPrompt(stdout, "Select a change to diff", changes, selectedIndex, "↑↓ navigate • ⏎ select", &rendered)
 
 	for {
-		input, err := reader.ReadByte()
+		input, err := readPromptInput(reader)
 		if err != nil {
-			if errors.Is(err, io.EOF) {
-				return resolveSelection(stdout, changes, selectedIndex, typedSelection.String(), true)
-			}
 			return "", err
 		}
 
-		switch input {
-		case '\r', '\n':
+		switch input.kind {
+		case promptInputEOF:
+			return resolveSelection(stdout, changes, selectedIndex, typedSelection.String(), true)
+		case promptInputSubmit:
 			return resolveSelection(stdout, changes, selectedIndex, typedSelection.String(), false)
-		case '\x1b':
-			next, err := reader.ReadByte()
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					return resolveSelection(stdout, changes, selectedIndex, typedSelection.String(), true)
-				}
-				return "", err
+		case promptInputMoveUp:
+			if selectedIndex > 0 {
+				selectedIndex--
 			}
-			if next != '[' {
-				typedSelection.WriteByte(input)
-				typedSelection.WriteByte(next)
-				continue
+			renderSingleSelectionPrompt(stdout, "Select a change to diff", changes, selectedIndex, "↑↓ navigate • ⏎ select", &rendered)
+		case promptInputMoveDown:
+			if selectedIndex < len(changes)-1 {
+				selectedIndex++
 			}
-
-			direction, err := reader.ReadByte()
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					return resolveSelection(stdout, changes, selectedIndex, typedSelection.String(), true)
-				}
-				return "", err
-			}
-
-			switch direction {
-			case 'A':
-				if selectedIndex > 0 {
-					selectedIndex--
-				}
-				renderPrompt()
-			case 'B':
-				if selectedIndex < len(changes)-1 {
-					selectedIndex++
-				}
-				renderPrompt()
-			default:
-				typedSelection.WriteByte(input)
-				typedSelection.WriteByte(next)
-				typedSelection.WriteByte(direction)
-			}
+			renderSingleSelectionPrompt(stdout, "Select a change to diff", changes, selectedIndex, "↑↓ navigate • ⏎ select", &rendered)
 		default:
-			typedSelection.WriteByte(input)
+			typedSelection.WriteString(input.text)
 		}
 	}
 }
@@ -295,87 +262,131 @@ func selectSpecs(stdin io.Reader, stdout io.Writer, specs []string) ([]string, e
 	selected := make([]bool, len(specs))
 	rendered := false
 
-	renderPrompt := func() {
-		if rendered {
-			_, _ = fmt.Fprintf(stdout, "\x1b[%dA\x1b[J", len(specs)+promptOverhead)
-		}
-
-		_, _ = fmt.Fprintln(stdout, "? Select specs to diff")
-		for index, spec := range specs {
-			prefix := " "
-			if index == selectedIndex {
-				prefix = "❯"
-			}
-			marker := "◯"
-			if selected[index] {
-				marker = "◉"
-			}
-			_, _ = fmt.Fprintf(stdout, "%s %s %s\n", prefix, marker, spec)
-		}
-		_, _ = fmt.Fprintln(stdout)
-		_, _ = fmt.Fprintln(stdout, "↑↓ navigate • space toggle • ⏎ submit")
-		rendered = true
-	}
-
-	renderPrompt()
+	renderMultiSelectionPrompt(stdout, "Select specs to diff", specs, selected, selectedIndex, "↑↓ navigate • space toggle • ⏎ submit", &rendered)
 
 	for {
-		input, err := reader.ReadByte()
+		input, err := readPromptInput(reader)
 		if err != nil {
-			if errors.Is(err, io.EOF) {
-				return resolveSpecSelections(stdout, specs, selected, typedSelection.String(), true)
-			}
 			return nil, err
 		}
 
-		switch input {
-		case '\r', '\n':
+		switch input.kind {
+		case promptInputEOF:
+			return resolveSpecSelections(stdout, specs, selected, typedSelection.String(), true)
+		case promptInputSubmit:
 			return resolveSpecSelections(stdout, specs, selected, typedSelection.String(), false)
-		case ' ':
+		case promptInputToggle:
 			selected[selectedIndex] = !selected[selectedIndex]
-			renderPrompt()
-		case '\x1b':
-			next, err := reader.ReadByte()
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					return resolveSpecSelections(stdout, specs, selected, typedSelection.String(), true)
-				}
-				return nil, err
+			renderMultiSelectionPrompt(stdout, "Select specs to diff", specs, selected, selectedIndex, "↑↓ navigate • space toggle • ⏎ submit", &rendered)
+		case promptInputMoveUp:
+			if selectedIndex > 0 {
+				selectedIndex--
 			}
-			if next != '[' {
-				typedSelection.WriteByte(input)
-				typedSelection.WriteByte(next)
-				continue
+			renderMultiSelectionPrompt(stdout, "Select specs to diff", specs, selected, selectedIndex, "↑↓ navigate • space toggle • ⏎ submit", &rendered)
+		case promptInputMoveDown:
+			if selectedIndex < len(specs)-1 {
+				selectedIndex++
 			}
-
-			direction, err := reader.ReadByte()
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					return resolveSpecSelections(stdout, specs, selected, typedSelection.String(), true)
-				}
-				return nil, err
-			}
-
-			switch direction {
-			case 'A':
-				if selectedIndex > 0 {
-					selectedIndex--
-				}
-				renderPrompt()
-			case 'B':
-				if selectedIndex < len(specs)-1 {
-					selectedIndex++
-				}
-				renderPrompt()
-			default:
-				typedSelection.WriteByte(input)
-				typedSelection.WriteByte(next)
-				typedSelection.WriteByte(direction)
-			}
+			renderMultiSelectionPrompt(stdout, "Select specs to diff", specs, selected, selectedIndex, "↑↓ navigate • space toggle • ⏎ submit", &rendered)
 		default:
-			typedSelection.WriteByte(input)
+			typedSelection.WriteString(input.text)
 		}
 	}
+}
+
+func readPromptInput(reader *bufio.Reader) (promptInput, error) {
+	input, err := reader.ReadByte()
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return promptInput{kind: promptInputEOF}, nil
+		}
+		return promptInput{}, err
+	}
+
+	switch input {
+	case '\r', '\n':
+		return promptInput{kind: promptInputSubmit}, nil
+	case ' ':
+		return promptInput{kind: promptInputToggle, text: " "}, nil
+	case '\x1b':
+		return readPromptEscapeSequence(reader, input)
+	default:
+		return promptInput{kind: promptInputTyped, text: string(input)}, nil
+	}
+}
+
+func readPromptEscapeSequence(reader *bufio.Reader, start byte) (promptInput, error) {
+	next, err := reader.ReadByte()
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return promptInput{kind: promptInputEOF}, nil
+		}
+		return promptInput{}, err
+	}
+	if next != '[' {
+		return promptInput{kind: promptInputTyped, text: string([]byte{start, next})}, nil
+	}
+
+	direction, err := reader.ReadByte()
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return promptInput{kind: promptInputEOF}, nil
+		}
+		return promptInput{}, err
+	}
+
+	switch direction {
+	case 'A':
+		return promptInput{kind: promptInputMoveUp}, nil
+	case 'B':
+		return promptInput{kind: promptInputMoveDown}, nil
+	default:
+		return promptInput{kind: promptInputTyped, text: string([]byte{start, next, direction})}, nil
+	}
+}
+
+func renderSingleSelectionPrompt(stdout io.Writer, question string, options []string, selectedIndex int, hint string, rendered *bool) {
+	beginPromptRender(stdout, len(options), rendered)
+	_, _ = fmt.Fprintf(stdout, "? %s\n", question)
+	for index, option := range options {
+		prefix := " "
+		if index == selectedIndex {
+			prefix = "❯"
+		}
+		_, _ = fmt.Fprintf(stdout, "%s %s\n", prefix, option)
+	}
+	endPromptRender(stdout, hint, rendered)
+}
+
+func renderMultiSelectionPrompt(stdout io.Writer, question string, options []string, selected []bool, selectedIndex int, hint string, rendered *bool) {
+	beginPromptRender(stdout, len(options), rendered)
+	_, _ = fmt.Fprintf(stdout, "? %s\n", question)
+	for index, option := range options {
+		prefix := " "
+		if index == selectedIndex {
+			prefix = "❯"
+		}
+		marker := "◯"
+		if selected[index] {
+			marker = "◉"
+		}
+		_, _ = fmt.Fprintf(stdout, "%s %s %s\n", prefix, marker, option)
+	}
+	endPromptRender(stdout, hint, rendered)
+}
+
+func beginPromptRender(stdout io.Writer, optionCount int, rendered *bool) {
+	if *rendered {
+		// Move the cursor back to the top of the prompt and clear it before
+		// redrawing with the updated selection marker.
+		_, _ = fmt.Fprintf(stdout, "\x1b[%dA\x1b[J", optionCount+promptOverhead)
+	}
+}
+
+func endPromptRender(stdout io.Writer, hint string, rendered *bool) {
+	_, _ = fmt.Fprintln(stdout)
+	_, _ = fmt.Fprintln(stdout, hint)
+	*rendered = true
 }
 
 func resolveSpecSelections(stdout io.Writer, specs []string, selected []bool, rawSelection string, eof bool) ([]string, error) {
