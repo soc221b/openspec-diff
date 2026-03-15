@@ -1,7 +1,7 @@
 # Auth Specification - Changes
 ## ADDED Requirements
 ### Requirement: Single sign-on
-The system SHALL support single sign-on.
+Lorem ipsum SHALL dolor sit amet
 #### Scenario: Lorem ipsum
 - **WHEN** lorem ipsum
 - **THEN** lorem ipsum

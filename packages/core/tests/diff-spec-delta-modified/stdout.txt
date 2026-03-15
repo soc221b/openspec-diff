@@ -1,7 +1,3 @@
-6c6
-< Lorem ipsum SHALL lorem ipsum.
----
-> The system SHALL support single sign-on with provider verification.
 9c9,10
 < - **THEN** lorem ipsum
 ---
