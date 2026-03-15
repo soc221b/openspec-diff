@@ -23,7 +23,14 @@
       "executor": "nx:run-commands",
       "options": {
         "cwd": "packages/cli",
-        "command": "if ! command -v openspec >/dev/null 2>&1; then npm install -g @fission-ai/openspec@latest; fi && mkdir -p ./bin && cargo build --manifest-path ../core/Cargo.toml --target-dir ../../dist/target/core && cp ../../dist/target/core/debug/openspec-difftool ./bin/openspec-difftool && go build -o ./bin/openspec-diff ./cmd/openspec-diff && set -e && for fixture_dir in ./tests/*; do [ -d \"$fixture_dir\" ] || continue; ./tests/run-fixture-test.sh \"$fixture_dir\"; done"
+        "commands": [
+          "if ! command -v openspec >/dev/null 2>&1; then npm install -g @fission-ai/openspec@latest; fi",
+          "mkdir -p ./bin",
+          "cargo build --manifest-path ../core/Cargo.toml --target-dir ../../dist/target/core",
+          "cp ../../dist/target/core/debug/openspec-difftool ./bin/openspec-difftool",
+          "go build -o ./bin/openspec-diff ./cmd/openspec-diff",
+          "set -e && for fixture_dir in ./tests/*; do [ -d \"$fixture_dir\" ] || continue; ./tests/run-fixture-test.sh \"$fixture_dir\"; done"
+        ]
       }
     }
   }
