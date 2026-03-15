@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import {
   createDiffDocumentUri,
   DIFF_SCHEME,
+  getChangeSpecContext,
   isChangeSpecPath,
   loadDiffSnapshot,
 } from "./change-spec-diff.js";
@@ -51,15 +52,15 @@ class DiffController implements vscode.Disposable {
         },
       ),
       vscode.workspace.onDidChangeTextDocument((event) => {
-        this.scheduleRefresh(event.document.uri);
+        this.scheduleRefreshForDocument(event.document);
       }),
       vscode.workspace.onDidSaveTextDocument((document) => {
-        this.scheduleRefresh(document.uri);
+        this.scheduleRefreshForDocument(document);
       }),
     );
 
     const watcher = vscode.workspace.createFileSystemWatcher(
-      "**/openspec/changes/*/specs/**/spec.md",
+      "**/openspec/{changes/*/specs,specs}/**/spec.md",
     );
     watcher.onDidChange((uri) => this.scheduleRefresh(uri));
     watcher.onDidCreate((uri) => this.scheduleRefresh(uri));
@@ -91,7 +92,7 @@ class DiffController implements vscode.Disposable {
     const session = this.getOrCreateSession(uri);
 
     try {
-      await this.refreshSession(uri);
+      await this.refreshSession(session);
       await vscode.commands.executeCommand(
         "vscode.diff",
         session.leftUri,
@@ -109,34 +110,25 @@ class DiffController implements vscode.Disposable {
       return;
     }
 
-    const key = uri.toString();
-    const session = this.sessions.get(key);
-    if (!session) {
-      return;
-    }
+    for (const session of this.getSessionsForUri(uri)) {
+      if (session.timeout) {
+        clearTimeout(session.timeout);
+      }
 
-    if (session.timeout) {
-      clearTimeout(session.timeout);
+      session.timeout = setTimeout(() => {
+        void this.refreshSession(session).catch(async (error) => {
+          await vscode.window.showErrorMessage(toErrorMessage(error));
+        });
+      }, 150);
     }
-
-    session.timeout = setTimeout(() => {
-      void this.refreshSession(uri).catch(async (error) => {
-        await vscode.window.showErrorMessage(toErrorMessage(error));
-      });
-    }, 150);
   }
 
-  private async refreshSession(uri: vscode.Uri): Promise<void> {
-    const key = uri.toString();
-    const session = this.sessions.get(key);
-    if (!session) {
-      return;
-    }
-
+  private async refreshSession(session: DiffSession): Promise<void> {
     session.version += 1;
     const version = session.version;
-    const snapshot = await loadDiffSnapshot(uri.fsPath, {
-      changeSpecContent: this.openDocumentText(uri),
+    const snapshot = await loadDiffSnapshot(session.sourceUri.fsPath, {
+      changeSpecContent: this.openDocumentText(session.sourceUri),
+      mainSpecContent: this.openDocumentText(session.mainSpecUri),
     });
 
     if (version !== session.version) {
@@ -156,8 +148,11 @@ class DiffController implements vscode.Disposable {
     }
 
     const source = uri.toString();
+    const changeSpecContext = getChangeSpecContextOrThrow(uri.fsPath);
     const session: DiffSession = {
       title: "OpenSpec Diff",
+      sourceUri: uri,
+      mainSpecUri: vscode.Uri.file(changeSpecContext.mainSpecPath),
       leftUri: vscode.Uri.parse(createDiffDocumentUri(source, "main")),
       rightUri: vscode.Uri.parse(createDiffDocumentUri(source, "change")),
       version: 0,
@@ -170,6 +165,19 @@ class DiffController implements vscode.Disposable {
     return vscode.workspace.textDocuments
       .find((document) => document.uri.toString() === uri.toString())
       ?.getText();
+  }
+
+  private scheduleRefreshForDocument(document: vscode.TextDocument): void {
+    this.scheduleRefresh(document.uri);
+  }
+
+  private getSessionsForUri(uri: vscode.Uri): DiffSession[] {
+    const target = uri.toString();
+    return [...this.sessions.values()].filter(
+      (session) =>
+        session.sourceUri.toString() === target ||
+        session.mainSpecUri.toString() === target,
+    );
   }
 }
 
@@ -207,10 +215,20 @@ class DiffCodeLensProvider implements vscode.CodeLensProvider {
 
 interface DiffSession {
   title: string;
+  sourceUri: vscode.Uri;
+  mainSpecUri: vscode.Uri;
   leftUri: vscode.Uri;
   rightUri: vscode.Uri;
   version: number;
   timeout?: NodeJS.Timeout;
+}
+
+function getChangeSpecContextOrThrow(changeSpecPath: string) {
+  const context = getChangeSpecContext(changeSpecPath);
+  if (!context) {
+    throw new Error("Diff is only available for OpenSpec change spec files.");
+  }
+  return context;
 }
 
 function toErrorMessage(error: unknown): string {

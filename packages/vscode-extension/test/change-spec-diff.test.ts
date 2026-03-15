@@ -75,6 +75,35 @@ test("loadDiffSnapshot uses unsaved change content for non-delta specs", async (
   assert.equal(snapshot.changeContent, "# Unsaved change spec\n");
 });
 
+test("loadDiffSnapshot uses unsaved main spec content when provided", async () => {
+  const repoRoot = await createTempRepo();
+  const mainSpecPath = path.join(
+    repoRoot,
+    "openspec",
+    "specs",
+    "auth",
+    "spec.md",
+  );
+  const changeSpecPath = path.join(
+    repoRoot,
+    "openspec",
+    "changes",
+    "single-sign-on",
+    "specs",
+    "auth",
+    "spec.md",
+  );
+  await writeFile(mainSpecPath, "# On-disk main spec\n", "utf8");
+  await writeFile(changeSpecPath, "# Change spec\n", "utf8");
+
+  const snapshot = await loadDiffSnapshot(changeSpecPath, {
+    mainSpecContent: "# Unsaved main spec\n",
+  });
+
+  assert.equal(snapshot.mainContent, "# Unsaved main spec\n");
+  assert.equal(snapshot.changeContent, "# Change spec\n");
+});
+
 test("loadDiffSnapshot archives delta specs in a temporary workspace", async () => {
   const repoRoot = await createTempRepo();
   const mainSpecPath = path.join(

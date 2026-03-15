@@ -53,6 +53,7 @@ export type ArchiveRunner = (
 
 export interface LoadDiffSnapshotOptions {
   changeSpecContent?: string;
+  mainSpecContent?: string;
   archiveRunner?: ArchiveRunner;
 }
 
@@ -128,7 +129,8 @@ export async function loadDiffSnapshot(
     throw new Error("Diff is only available for OpenSpec change spec files.");
   }
 
-  const mainContent = await readTextIfExists(context.mainSpecPath);
+  const mainContent =
+    options.mainSpecContent ?? (await readTextIfExists(context.mainSpecPath));
   const changeSpecContent =
     options.changeSpecContent ??
     (await readFile(context.changeSpecPath, "utf8"));
