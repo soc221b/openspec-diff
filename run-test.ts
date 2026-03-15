@@ -416,21 +416,26 @@ function stripInlineComment(value) {
 function decodeInstruction(value, stdinPath, lineNumber) {
   try {
     return value.replace(
-      /\\(?:u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|([\\'"abfnrtv]))/g,
-      (match, unicodeHex, asciiHex, escapedChar) => decodeEscape(match, unicodeHex, asciiHex, escapedChar)
+      /\\(?:u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|([0-7]{1,3})|([\\'"abfnrtv]))/g,
+      (match, unicodeHex, asciiHex, octalDigits, escapedChar) =>
+        decodeEscape(match, unicodeHex, asciiHex, octalDigits, escapedChar)
     );
   } catch (error) {
     throw new Error(`${stdinPath}:${lineNumber}: invalid escape sequence in stdin instruction: ${error.message}`);
   }
 }
 
-function decodeEscape(match, unicodeHex, asciiHex, escapedChar) {
+function decodeEscape(match, unicodeHex, asciiHex, octalDigits, escapedChar) {
   if (unicodeHex) {
     return String.fromCharCode(Number.parseInt(unicodeHex, 16));
   }
 
   if (asciiHex) {
     return String.fromCharCode(Number.parseInt(asciiHex, 16));
+  }
+
+  if (octalDigits) {
+    return String.fromCharCode(Number.parseInt(octalDigits, 8));
   }
 
   return getSimpleEscapeMap()[escapedChar] ?? match;
@@ -452,8 +457,8 @@ function getSimpleEscapeMap() {
 }
 
 function normalizeOutput(value) {
-  const withoutRedrawHistory = value.includes('\u001b[J') ? value.split('\u001b[J').at(-1) : value;
-  return withoutRedrawHistory.replace(/\u001b\[\d+A/g, '');
+  const lastScreenState = value.includes('\u001b[J') ? value.split('\u001b[J').at(-1) : value;
+  return lastScreenState.replace(/\u001b\[\d+A/g, '');
 }
 
 async function waitForOutputToSettle(child, getLength) {
@@ -551,8 +556,8 @@ function runDiff(expectedPath, actualPath) {
 
 function formatCommandFailure(fixtureDir, result) {
   const code = result.exitCode === null ? 'null' : String(result.exitCode);
-  const signal = result.signalCode ? `, signal ${result.signalCode}` : '';
-  return `Command failed for ${fixtureDir} with exit code ${code}${signal}`;
+  const signalSuffix = result.signalCode ? `, signal ${result.signalCode}` : '';
+  return `Command failed for ${fixtureDir} with exit code ${code}${signalSuffix}`;
 }
 
 function formatCompletedCommand(command, args, completed) {
