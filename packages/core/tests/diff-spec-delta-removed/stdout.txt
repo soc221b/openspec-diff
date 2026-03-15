@@ -4,5 +4,3 @@
 < #### Scenario: Lorem ipsum
 < - **WHEN** lorem ipsum
 < - **THEN** lorem ipsum
-14a10
-> 
