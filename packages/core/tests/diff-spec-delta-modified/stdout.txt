@@ -1,5 +1,5 @@
 9c9,10
 < - **THEN** lorem ipsum
 ---
-> - **THEN** lorem ipsum after provider verification
+> - **THEN** Lorem ipsum dolor sit amet
 > 

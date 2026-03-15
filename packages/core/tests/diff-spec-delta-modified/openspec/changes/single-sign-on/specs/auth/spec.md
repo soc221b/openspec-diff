@@ -4,4 +4,4 @@
 Lorem ipsum SHALL dolor sit amet
 #### Scenario: Lorem ipsum
 - **WHEN** lorem ipsum
-- **THEN** lorem ipsum after provider verification
+- **THEN** Lorem ipsum dolor sit amet
