@@ -10,13 +10,19 @@
     "vscode": "^1.110.0"
   },
   "activationEvents": [
-    "onCommand:openspecDiff.hello"
+    "onCommand:openspecDiff.hello",
+    "onCommand:openspecDiff.openDiff",
+    "onLanguage:markdown"
   ],
   "contributes": {
     "commands": [
       {
         "command": "openspecDiff.hello",
         "title": "OpenSpec Diff: Hello"
+      },
+      {
+        "command": "openspecDiff.openDiff",
+        "title": "Diff"
       }
     ]
   },
