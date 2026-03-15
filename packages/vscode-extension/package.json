@@ -22,7 +22,7 @@
       },
       {
         "command": "openspecDiff.openDiff",
-        "title": "Diff"
+        "title": "OpenSpec Diff"
       }
     ]
   },
