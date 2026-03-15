@@ -10,28 +10,37 @@ const OUTPUT_IDLE_TIMEOUT_MS = 200;
 const OUTPUT_POLL_INTERVAL_MS = 10;
 const MAX_OUTPUT_SETTLE_MS = 1000;
 const PROCESS_EXIT_TIMEOUT_MS = 5000;
-const SUCCESS_EXIT_CODES = new Set([0, 1]);
-
 main().catch(handleFatalError);
 
 async function main() {
   const testsPath = getTestsPath(process.argv);
   const workspaceRoot = __dirname;
   const context = createContext(workspaceRoot, testsPath);
+  const failures = [];
 
   ensurePathExists(testsPath);
 
   for (const fixtureDir of getFixtureDirectories(testsPath)) {
-    await runFixture(context, fixtureDir);
+    const failure = await runFixture(context, fixtureDir);
+    process.stdout.write(failure ? 'x' : '.');
+
+    if (failure) {
+      failures.push(failure);
+    }
+  }
+
+  process.stdout.write('\n');
+
+  if (failures.length > 0) {
+    throw new Error(formatFailures(failures));
   }
 }
 
 async function runFixture(context, fixtureDir) {
-  ensureFixtureInputs(fixtureDir);
-
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openspec-diff-test-'));
 
   try {
+    ensureFixtureInputs(fixtureDir);
     const outputPaths = prepareFixtureWorkspace(context, fixtureDir, tempDir);
     const commandPlan = parseFixturePlan(
       fixtureDir,
@@ -44,8 +53,12 @@ async function runFixture(context, fixtureDir) {
       : runNonInteractiveCommand(commandPlan, outputPaths);
 
     writeCommandOutputs(outputPaths, result);
-    validateCommandResult(result, commandPlan, fixtureDir, context.interactive);
+    validateCommandResult(result, commandPlan);
     assertFixtureOutputs(fixtureDir, outputPaths);
+    return null;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { fixtureDir, message };
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
@@ -127,8 +140,8 @@ async function runInteractiveCommand(commandPlan, outputPaths) {
   };
 }
 
-function validateCommandResult(result, commandPlan, fixtureDir, interactive) {
-  if (interactive && result.timedOut) {
+function validateCommandResult(result, commandPlan) {
+  if (result.timedOut) {
     const lastInstruction = commandPlan.instructions.at(-1);
     const lineNumber = lastInstruction?.lineNumber ?? 1;
 
@@ -137,15 +150,14 @@ function validateCommandResult(result, commandPlan, fixtureDir, interactive) {
     );
   }
 
-  if (SUCCESS_EXIT_CODES.has(result.exitCode ?? -1)) {
-    return;
-  }
+  const expectedExitCode = readExpectedExitCode(commandPlan.fixtureDir);
+  const actualExitCode = getActualExitCode(result);
 
-  if (interactive && result.aborted && (result.signalCode === 'SIGINT' || result.exitCode === 130)) {
-    return;
+  if (actualExitCode !== expectedExitCode) {
+    throw new Error(
+      `${commandPlan.fixtureDir}/exit-code.txt: expected ${expectedExitCode}, received ${actualExitCode}`
+    );
   }
-
-  throw new Error(formatCommandFailure(fixtureDir, result));
 }
 
 function assertFixtureOutputs(fixtureDir, outputPaths) {
@@ -236,6 +248,7 @@ function parseFixturePlan(fixtureDir, commandPath, commandName, interactive) {
   }
 
   return {
+    fixtureDir,
     stdinPath,
     command,
     instructions,
@@ -282,9 +295,14 @@ function ensurePathExists(targetPath) {
 
 function ensureFixtureInputs(fixtureDir) {
   const stdinPath = path.join(fixtureDir, 'stdin.txt');
+  const exitCodePath = path.join(fixtureDir, 'exit-code.txt');
 
   if (!fs.existsSync(stdinPath)) {
     throw new Error(`Missing required stdin fixture: ${stdinPath}`);
+  }
+
+  if (!fs.existsSync(exitCodePath)) {
+    throw new Error(`Missing required exit code fixture: ${exitCodePath}`);
   }
 }
 
@@ -554,10 +572,59 @@ function runDiff(expectedPath, actualPath) {
   throw new Error(`Output mismatch: ${expectedPath} vs ${actualPath}`);
 }
 
-function formatCommandFailure(fixtureDir, result) {
-  const code = result.exitCode === null ? 'null' : String(result.exitCode);
-  const signalSuffix = result.signalCode ? `, signal ${result.signalCode}` : '';
-  return `Command failed for ${fixtureDir} with exit code ${code}${signalSuffix}`;
+function readExpectedExitCode(fixtureDir) {
+  const exitCodePath = path.join(fixtureDir, 'exit-code.txt');
+  const value = fs.readFileSync(exitCodePath, 'utf8').trim();
+  const exitCode = Number.parseInt(value, 10);
+
+  if (!Number.isInteger(exitCode) || String(exitCode) !== value) {
+    throw new Error(`${exitCodePath}: expected a single integer exit code`);
+  }
+
+  return exitCode;
+}
+
+function getActualExitCode(result) {
+  if (typeof result.exitCode === 'number') {
+    return result.exitCode;
+  }
+
+  if (result.signalCode) {
+    return 128 + getSignalNumber(result.signalCode);
+  }
+
+  throw new Error('Command exited without an exit code or signal');
+}
+
+function getSignalNumber(signalCode) {
+  const signalNumbers = {
+    SIGHUP: 1,
+    SIGINT: 2,
+    SIGQUIT: 3,
+    SIGILL: 4,
+    SIGTRAP: 5,
+    SIGABRT: 6,
+    SIGBUS: 7,
+    SIGFPE: 8,
+    SIGKILL: 9,
+    SIGUSR1: 10,
+    SIGSEGV: 11,
+    SIGUSR2: 12,
+    SIGPIPE: 13,
+    SIGALRM: 14,
+    SIGTERM: 15,
+  };
+  const signalNumber = signalNumbers[signalCode];
+
+  if (!signalNumber) {
+    throw new Error(`Unsupported signal code: ${signalCode}`);
+  }
+
+  return signalNumber;
+}
+
+function formatFailures(failures) {
+  return failures.map((failure) => `${failure.fixtureDir}\n${failure.message}`).join('\n\n');
 }
 
 function formatCompletedCommand(command, args, completed) {
