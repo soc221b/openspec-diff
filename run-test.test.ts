@@ -47,7 +47,7 @@ function createCliFixtureWorkspace({
   }
 
   if (exitCode !== undefined && exitCode !== 0) {
-    fs.writeFileSync(path.join(fixtureDir, 'exit-code.txt'), `${exitCode}\n`, 'utf8');
+    fs.writeFileSync(path.join(fixtureDir, 'exit-code.txt'), `${exitCode}`, 'utf8');
   }
 
   return { workspaceRoot, testsDir, fixtureDir };
@@ -119,7 +119,7 @@ test('runFixtureCommand writes real stdout, stderr, and exit code files and retu
     assert.deepEqual(readOutputDirectory(result.path), {
       stdout: '\u001b[Jout',
       stderr: 'err',
-      exitCode: '3\n',
+      exitCode: '3',
     });
   } finally {
     if (outputPath) {

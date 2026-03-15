@@ -419,7 +419,7 @@ function writeCommandOutputs(
 
   if (exitCode !== 0) {
     fs.writeFileSync(outputPaths.stderrPath, result.stderr, 'utf8');
-    fs.writeFileSync(outputPaths.exitCodePath, `${exitCode}\n`, 'utf8');
+    fs.writeFileSync(outputPaths.exitCodePath, `${exitCode}`, 'utf8');
   }
 }
 
