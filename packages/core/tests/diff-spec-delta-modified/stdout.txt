@@ -3,7 +3,7 @@
 7d5
 < 
 9c7
-< The system SHALL support single sign-on.
+< Lorem ipsum SHALL lorem ipsum.
 ---
 > The system SHALL support single sign-on with provider verification.
 13c11,12

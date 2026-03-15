@@ -6,7 +6,7 @@ Lorem ipsum
 ## Requirements
 
 ### Requirement: Single sign-on
-The system SHALL support single sign-on.
+Lorem ipsum SHALL lorem ipsum.
 
 #### Scenario: A customer completes single sign-on
 - **WHEN** lorem ipsum
