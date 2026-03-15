@@ -2,8 +2,8 @@
 < 
 7,8c6
 < 
-< ### Requirement: The system SHALL let a customer sign in with a verified account
+< ### Requirement: Single sign-on
 ---
-> ### Requirement: The system SHALL let a customer sign in with a verified account through single sign-on
+> ### Requirement: Single sign-on (SSO)
 13a12
 > 
