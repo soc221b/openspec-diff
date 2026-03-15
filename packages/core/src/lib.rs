@@ -125,7 +125,21 @@ fn preprocess_change_spec(
 ) -> Result<PathBuf, String> {
     let temp_root = create_temp_directory("openspec-difftool")?;
     let temp_guard = TempPathGuard::new(temp_root.clone());
+    let synthesized_spec_path = temp_root.join(context.main_spec_relative_path());
 
+    prepare_temp_change_workspace(context, &temp_root)?;
+    let archive_output = run_archive_command(context, openspec_command, &temp_root)?;
+    validate_archive_output(context.change_spec_path.as_path(), &archive_output)?;
+    ensure_synthesized_spec_exists(context.change_spec_path.as_path(), &synthesized_spec_path)?;
+
+    guards.push(temp_guard);
+    Ok(synthesized_spec_path)
+}
+
+fn prepare_temp_change_workspace(
+    context: &ChangeSpecContext,
+    temp_root: &Path,
+) -> Result<(), String> {
     let temp_change_spec_path = temp_root.join(context.change_spec_relative_path());
     copy_file(&context.change_spec_path, &temp_change_spec_path)?;
 
@@ -138,10 +152,16 @@ fn preprocess_change_spec(
         .join(OPENSPEC_DIRECTORY)
         .join(CHANGES_DIRECTORY)
         .join(&context.change_name);
-    write_minimal_change_files(&temp_change_root)?;
+    write_minimal_change_files(&temp_change_root)
+}
 
+fn run_archive_command(
+    context: &ChangeSpecContext,
+    openspec_command: &OsStr,
+    temp_root: &Path,
+) -> Result<ArchiveCommandOutput, String> {
     let output = Command::new(openspec_command)
-        .current_dir(&temp_root)
+        .current_dir(temp_root)
         .arg("archive")
         .arg(&context.change_name)
         .arg("--yes")
@@ -160,66 +180,80 @@ fn preprocess_change_spec(
             }
         })?;
 
-    let (stdout, stderr) = decode_archive_output(&output);
+    Ok(ArchiveCommandOutput::from_process_output(output))
+}
 
+fn validate_archive_output(
+    change_spec_path: &Path,
+    output: &ArchiveCommandOutput,
+) -> Result<(), String> {
     if !output.status.success() {
-        let details = archive_output_details(
-            stdout.as_str(),
-            stderr.as_str(),
-            &format!("openspec archive exited with status {}", output.status),
-        );
         return Err(format!(
-            "failed to preprocess delta spec {}: {details}",
-            context.change_spec_path.display()
+            "failed to preprocess delta spec {}: {}",
+            change_spec_path.display(),
+            output.details(&format!(
+                "openspec archive exited with status {}",
+                output.status
+            ))
         ));
     }
 
-    if archive_aborted_without_writing(stdout.as_str(), stderr.as_str()) {
-        let details = archive_output_details(
-            stdout.as_str(),
-            stderr.as_str(),
-            "openspec archive aborted: no files were changed",
-        );
+    if output.aborted_without_writing() {
         return Err(format!(
-            "failed to preprocess delta spec {}: {details}",
-            context.change_spec_path.display()
+            "failed to preprocess delta spec {}: {}",
+            change_spec_path.display(),
+            output.details("openspec archive aborted: no files were changed")
         ));
     }
 
-    let synthesized_spec_path = temp_root.join(context.main_spec_relative_path());
-    if !synthesized_spec_path.exists() {
-        return Err(format!(
-            "failed to preprocess delta spec {}: archive did not produce {}",
-            context.change_spec_path.display(),
-            synthesized_spec_path.display()
-        ));
+    Ok(())
+}
+
+fn ensure_synthesized_spec_exists(
+    change_spec_path: &Path,
+    synthesized_spec_path: &Path,
+) -> Result<(), String> {
+    if synthesized_spec_path.exists() {
+        return Ok(());
     }
 
-    guards.push(temp_guard);
-    Ok(synthesized_spec_path)
+    Err(format!(
+        "failed to preprocess delta spec {}: archive did not produce {}",
+        change_spec_path.display(),
+        synthesized_spec_path.display()
+    ))
 }
 
-fn archive_aborted_without_writing(stdout: &str, stderr: &str) -> bool {
-    let aborted_marker = "Aborted. No files were changed.";
-
-    stdout.contains(aborted_marker) || stderr.contains(aborted_marker)
+struct ArchiveCommandOutput {
+    status: std::process::ExitStatus,
+    stdout: String,
+    stderr: String,
 }
 
-fn archive_output_details(stdout: &str, stderr: &str, fallback: &str) -> String {
-    if !stderr.is_empty() {
-        stderr.to_owned()
-    } else if !stdout.is_empty() {
-        stdout.to_owned()
-    } else {
-        fallback.to_owned()
+impl ArchiveCommandOutput {
+    fn from_process_output(output: std::process::Output) -> Self {
+        Self {
+            status: output.status,
+            stdout: String::from_utf8_lossy(&output.stdout).trim().to_owned(),
+            stderr: String::from_utf8_lossy(&output.stderr).trim().to_owned(),
+        }
     }
-}
 
-fn decode_archive_output(output: &std::process::Output) -> (String, String) {
-    (
-        String::from_utf8_lossy(&output.stdout).trim().to_owned(),
-        String::from_utf8_lossy(&output.stderr).trim().to_owned(),
-    )
+    fn aborted_without_writing(&self) -> bool {
+        let aborted_marker = "Aborted. No files were changed.";
+
+        self.stdout.contains(aborted_marker) || self.stderr.contains(aborted_marker)
+    }
+
+    fn details(&self, fallback: &str) -> String {
+        if !self.stderr.is_empty() {
+            self.stderr.clone()
+        } else if !self.stdout.is_empty() {
+            self.stdout.clone()
+        } else {
+            fallback.to_owned()
+        }
+    }
 }
 
 fn copy_file(source: &Path, target: &Path) -> Result<(), String> {
@@ -359,5 +393,45 @@ impl TempPathGuard {
 impl Drop for TempPathGuard {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.path);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ArchiveCommandOutput;
+    use std::process::{ExitStatus, Output};
+
+    #[cfg(unix)]
+    fn exit_status(code: i32) -> ExitStatus {
+        use std::os::unix::process::ExitStatusExt;
+        ExitStatus::from_raw(code << 8)
+    }
+
+    #[cfg(windows)]
+    fn exit_status(code: u32) -> ExitStatus {
+        use std::os::windows::process::ExitStatusExt;
+        ExitStatus::from_raw(code)
+    }
+
+    fn archive_output(status: ExitStatus, stdout: &[u8], stderr: &[u8]) -> ArchiveCommandOutput {
+        ArchiveCommandOutput::from_process_output(Output {
+            status,
+            stdout: stdout.to_vec(),
+            stderr: stderr.to_vec(),
+        })
+    }
+
+    #[test]
+    fn archive_output_prefers_stderr_details() {
+        let output = archive_output(exit_status(1), b"stdout detail", b"stderr detail");
+
+        assert_eq!(output.details("fallback"), "stderr detail");
+    }
+
+    #[test]
+    fn archive_output_detects_aborted_archive_marker() {
+        let output = archive_output(exit_status(0), b"Aborted. No files were changed.", b"");
+
+        assert!(output.aborted_without_writing());
     }
 }
