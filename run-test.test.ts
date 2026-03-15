@@ -99,58 +99,31 @@ test('runFixtureSuite reports a timeout when scripted interactive input does not
   }
 });
 
-test('assertFixtureResult compares stdout, stderr, and exit codes together', () => {
+test('assertFixtureResult returns exitCode 0 when expected and actual files match', () => {
   const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'run-test-assert-'));
-  const workspaceDir = path.join(fixtureDir, 'workspace');
-  const stdoutPath = path.join(fixtureDir, 'actual-stdout.txt');
-  const stderrPath = path.join(fixtureDir, 'actual-stderr.txt');
+  const expectedPath = path.join(fixtureDir, 'expected.txt');
+  const actualPath = path.join(fixtureDir, 'actual.txt');
 
-  fs.mkdirSync(workspaceDir, { recursive: true });
-  fs.writeFileSync(path.join(fixtureDir, 'stdout.txt'), 'hello\n', 'utf8');
-  fs.writeFileSync(path.join(fixtureDir, 'stderr.txt'), `${fixtureDir}/problem\n`, 'utf8');
-  fs.writeFileSync(path.join(fixtureDir, 'exit-code.txt'), '130\n', 'utf8');
+  fs.writeFileSync(expectedPath, 'hello\n', 'utf8');
+  fs.writeFileSync(actualPath, 'hello\n', 'utf8');
 
   try {
-    assert.doesNotThrow(() =>
-      assertFixtureResult({
-        fixtureDir,
-        outputPaths: { workspaceDir, stdoutPath, stderrPath },
-        result: {
-          stdout: 'hello\n',
-          stderr: `${workspaceDir}/problem\n`,
-          exitCode: 130,
-        },
-      })
-    );
+    assert.deepEqual(assertFixtureResult({ expectedPath, actualPath }), { exitCode: 0 });
   } finally {
     fs.rmSync(fixtureDir, { recursive: true, force: true });
   }
 });
 
-test('assertFixtureResult fails when the exit code does not match the fixture expectation', () => {
+test('assertFixtureResult returns exitCode 1 when expected and actual files differ', () => {
   const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'run-test-assert-fail-'));
-  const workspaceDir = path.join(fixtureDir, 'workspace');
-  const stdoutPath = path.join(fixtureDir, 'actual-stdout.txt');
-  const stderrPath = path.join(fixtureDir, 'actual-stderr.txt');
+  const expectedPath = path.join(fixtureDir, 'expected.txt');
+  const actualPath = path.join(fixtureDir, 'actual.txt');
 
-  fs.mkdirSync(workspaceDir, { recursive: true });
-  fs.writeFileSync(path.join(fixtureDir, 'stdout.txt'), 'ok\n', 'utf8');
-  fs.writeFileSync(path.join(fixtureDir, 'exit-code.txt'), '0\n', 'utf8');
+  fs.writeFileSync(expectedPath, 'ok\n', 'utf8');
+  fs.writeFileSync(actualPath, 'nope\n', 'utf8');
 
   try {
-    assert.throws(
-      () =>
-        assertFixtureResult({
-          fixtureDir,
-          outputPaths: { workspaceDir, stdoutPath, stderrPath },
-          result: {
-            stdout: 'ok\n',
-            stderr: '',
-            exitCode: 1,
-          },
-        }),
-      new RegExp(`${fixtureDir.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}/exit-code.txt: expected 0, received 1`)
-    );
+    assert.deepEqual(assertFixtureResult({ expectedPath, actualPath }), { exitCode: 1 });
   } finally {
     fs.rmSync(fixtureDir, { recursive: true, force: true });
   }

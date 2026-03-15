@@ -16,6 +16,8 @@ type FixtureFailure = { fixtureDir: string; message: string };
 type FixtureInstruction = { lineNumber: number; value: string };
 type CommandRunnerInput = { commands: string[]; workingDirectory: string };
 type CommandResult = { stdout: string; stderr: string; exitCode: number };
+type FixtureAssertionInput = { expectedPath: string; actualPath: string };
+type FixtureAssertionResult = { exitCode: number };
 type DetailedCommandResult = {
   stdout: string;
   stderr: string;
@@ -100,7 +102,7 @@ async function executeFixture(context: FixtureContext, fixtureDir: string): Prom
   try {
     const execution = createFixtureExecution(context, fixtureDir, tempDir);
     const result = await runPlannedFixtureCommand(execution.commandPlan, execution.outputPaths.workspaceDir);
-    assertFixtureResult({ fixtureDir, outputPaths: execution.outputPaths, result });
+    validateFixtureResult({ fixtureDir, outputPaths: execution.outputPaths, result });
     return null;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -140,6 +142,22 @@ function runPlannedFixtureCommand(commandPlan: CommandPlan, workingDirectory: st
 }
 
 export function assertFixtureResult({
+  expectedPath,
+  actualPath,
+}: FixtureAssertionInput): FixtureAssertionResult {
+  const completed = spawnSync('diff', ['-u', expectedPath, actualPath], {
+    encoding: 'utf8',
+    stdio: 'inherit',
+  });
+
+  if (completed.status === null) {
+    throw new Error(formatCompletedCommand('diff', ['-u', expectedPath, actualPath], completed));
+  }
+
+  return { exitCode: completed.status };
+}
+
+function validateFixtureResult({
   fixtureDir,
   outputPaths,
   result,
@@ -230,13 +248,13 @@ function assertOutputFiles(
   fixtureDir: string,
   outputPaths: Pick<OutputPaths, 'stdoutPath' | 'stderrPath'>
 ) {
-  runDiff(path.join(fixtureDir, 'stdout.txt'), outputPaths.stdoutPath);
+  assertDiffMatches(path.join(fixtureDir, 'stdout.txt'), outputPaths.stdoutPath);
 
   const expectedStderrPath = path.join(fixtureDir, 'stderr.txt');
   const actualStderr = fs.readFileSync(outputPaths.stderrPath, 'utf8');
 
   if (fs.existsSync(expectedStderrPath)) {
-    runDiff(expectedStderrPath, outputPaths.stderrPath);
+    assertDiffMatches(expectedStderrPath, outputPaths.stderrPath);
     return;
   }
 
@@ -687,13 +705,8 @@ function runCheckedCommand(command: string, args: string[]) {
   throw new Error(formatCompletedCommand(command, args, completed));
 }
 
-function runDiff(expectedPath: string, actualPath: string) {
-  const completed = spawnSync('diff', ['-u', expectedPath, actualPath], {
-    encoding: 'utf8',
-    stdio: 'inherit',
-  });
-
-  if (completed.status === 0) {
+function assertDiffMatches(expectedPath: string, actualPath: string) {
+  if (assertFixtureResult({ expectedPath, actualPath }).exitCode === 0) {
     return;
   }
 
