@@ -1,28 +1,129 @@
 #!/usr/bin/env node
-// @ts-check
 
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
-const { spawn, spawnSync } = require('node:child_process');
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { spawn, spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const OUTPUT_IDLE_TIMEOUT_MS = 200;
 const OUTPUT_POLL_INTERVAL_MS = 10;
 const MAX_OUTPUT_SETTLE_MS = 1000;
 const PROCESS_EXIT_TIMEOUT_MS = 5000;
 const SIGNAL_EXIT_CODE_OFFSET = 128;
-main().catch(handleFatalError);
+const TESTS_DIRECTORY_NAME = 'tests';
+type FixtureFailure = { fixtureDir: string; message: string };
+type FixtureInstruction = { lineNumber: number; value: string };
+type CommandRunnerInput = { stdin: string; path: string };
+type CommandResult = { path: string };
+type FixtureAssertionInput = { expectedPath: string; actualPath: string };
+type FixtureAssertionResult = { exitCode: number };
+type DetailedCommandResult = {
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  signalCode: NodeJS.Signals | null;
+  aborted: boolean;
+  timedOut: boolean;
+};
+type PackageContext = {
+  interactive: boolean;
+  commandName: string;
+  resolveCommandPath: (context: { workspaceRoot: string; packageDir: string }) => string;
+};
+type FixtureContext = PackageContext & { workspaceRoot: string; packageDir: string };
+type CommandPlan = {
+  fixtureDir: string;
+  stdinPath: string;
+  command: string[];
+  instructions: FixtureInstruction[];
+  interactive: boolean;
+};
+type OutputPaths = {
+  actualDir: string;
+  workspaceDir: string;
+  stdoutPath: string;
+  stderrPath: string;
+  exitCodePath: string;
+  commandPath: string;
+};
 
-async function main() {
-  const testsPath = getTestsPath(process.argv);
-  const workspaceRoot = __dirname;
-  const context = createContext(workspaceRoot, testsPath);
-  const fixtureFailures = /** @type {Array<{ fixtureDir: string; message: string }>} */ ([]);
+const PACKAGE_CONTEXTS: Record<string, PackageContext> = {
+  cli: {
+    interactive: true,
+    commandName: 'openspec-diff',
+    resolveCommandPath: ({ packageDir }) => path.join(packageDir, 'bin', 'openspec-diff'),
+  },
+  core: {
+    interactive: false,
+    commandName: 'openspec-difftool',
+    resolveCommandPath: ({ workspaceRoot }) =>
+      path.join(workspaceRoot, 'dist', 'target', 'core', 'debug', 'openspec-difftool'),
+  },
+};
 
+async function main(argv = process.argv) {
+  const testsPath = getTestsPath(argv);
   ensurePathExists(testsPath);
+  const fixtureFailures: FixtureFailure[] = [];
 
   for (const fixtureDir of getFixtureDirectories(testsPath)) {
-    const failure = await runFixture(context, fixtureDir);
+    let actualPath: string | null = null;
+
+    try {
+      const result = await runFixtureCommand({
+        stdin: fs.readFileSync(path.join(fixtureDir, 'stdin.txt'), 'utf8'),
+        path: fixtureDir,
+      });
+      actualPath = result.path;
+      const assertion = assertFixtureResult({
+        expectedPath: fixtureDir,
+        actualPath,
+      });
+
+      if (assertion.exitCode !== 0) {
+        throw new Error(`Fixture assertion failed for ${fixtureDir}`);
+      }
+
+      process.stdout.write('.');
+    } catch (error) {
+      process.stdout.write('F');
+      fixtureFailures.push({
+        fixtureDir,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      if (actualPath) {
+        fs.rmSync(actualPath, { recursive: true, force: true });
+      }
+    }
+  }
+
+  process.stdout.write('\n');
+
+  if (fixtureFailures.length > 0) {
+    process.stdout.write(`${formatFailureList(fixtureFailures)}\n`);
+    process.exitCode = 1;
+    return;
+  }
+
+  process.exitCode = 0;
+}
+
+async function runFixtureSuite({
+  workspaceRoot,
+  testsPath,
+}: {
+  workspaceRoot: string;
+  testsPath: string;
+}): Promise<FixtureFailure[]> {
+  ensurePathExists(testsPath);
+
+  const context = createContext(workspaceRoot, testsPath);
+  const fixtureFailures: FixtureFailure[] = [];
+
+  for (const fixtureDir of getFixtureDirectories(testsPath)) {
+    const failure = await executeFixture(context, fixtureDir);
     process.stdout.write(failure ? 'x' : '.');
 
     if (failure) {
@@ -30,44 +131,143 @@ async function main() {
     }
   }
 
-  process.stdout.write('\n');
-
-  if (fixtureFailures.length > 0) {
-    throw new Error(formatFailures(fixtureFailures));
-  }
+  return fixtureFailures;
 }
 
-async function runFixture(context, fixtureDir) {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openspec-diff-test-'));
-
+async function executeFixture(context: FixtureContext, fixtureDir: string): Promise<FixtureFailure | null> {
   try {
-    ensureFixtureInputs(fixtureDir);
-    const outputPaths = prepareFixtureWorkspace(context, fixtureDir, tempDir);
-    const commandPlan = parseFixturePlan(
+    const result = await runFixtureCommandInWorkspace({
+      stdin: fs.readFileSync(path.join(fixtureDir, 'stdin.txt'), 'utf8'),
       fixtureDir,
-      outputPaths.commandPath,
-      context.commandName,
-      context.interactive
-    );
-    const result = context.interactive
-      ? await runInteractiveCommand(commandPlan, outputPaths)
-      : runNonInteractiveCommand(commandPlan, outputPaths);
+      workspaceRoot: context.workspaceRoot,
+    });
 
-    writeCommandOutputs(fixtureDir, outputPaths, result);
-    validateCommandResult(result, commandPlan);
-    assertFixtureOutputs(fixtureDir, outputPaths);
+    try {
+      const assertion = assertFixtureResult({
+        expectedPath: fixtureDir,
+        actualPath: result.path,
+      });
+
+      if (assertion.exitCode !== 0) {
+        throw new Error(`Fixture assertion failed for ${fixtureDir}`);
+      }
+    } finally {
+      fs.rmSync(result.path, { recursive: true, force: true });
+    }
+
     return null;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return { fixtureDir, message };
-  } finally {
-    fs.rmSync(tempDir, { recursive: true, force: true });
   }
 }
 
-function runNonInteractiveCommand(commandPlan, outputPaths) {
-  const completed = spawnSync(commandPlan.command[0], commandPlan.command.slice(1), {
-    cwd: outputPaths.workspaceDir,
+export async function runFixtureCommand({
+  stdin,
+  path: fixtureDir,
+}: CommandRunnerInput): Promise<CommandResult> {
+  return runFixtureCommandInWorkspace({
+    stdin,
+    fixtureDir,
+    workspaceRoot: getWorkspaceRoot(import.meta.url),
+  });
+}
+
+async function runFixtureCommandInWorkspace({
+  stdin,
+  fixtureDir,
+  workspaceRoot,
+}: {
+  stdin: string;
+  fixtureDir: string;
+  workspaceRoot: string;
+}): Promise<CommandResult> {
+  const context = createContext(workspaceRoot, fixtureDir);
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openspec-diff-test-'));
+  let keepTempDir = false;
+
+  try {
+    ensureFixtureInputs(fixtureDir);
+
+    const outputPaths = prepareFixtureWorkspace(context, fixtureDir, tempDir);
+    const commandPlan = parseFixturePlan(
+      fixtureDir,
+      stdin,
+      outputPaths.commandPath,
+      context.commandName,
+      context.interactive
+    );
+    const result = await runPlannedFixtureCommand(commandPlan, outputPaths.workspaceDir);
+    writeCommandOutputs(outputPaths, result);
+    keepTempDir = true;
+
+    return {
+      path: outputPaths.actualDir,
+    };
+  } finally {
+    if (!keepTempDir) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }
+}
+
+function runPlannedFixtureCommand(commandPlan: CommandPlan, workingDirectory: string): Promise<DetailedCommandResult> {
+  if (!commandPlan.interactive) {
+    return Promise.resolve(runCommand(commandPlan.command, workingDirectory));
+  }
+
+  return runInteractiveFixtureCommand(commandPlan, workingDirectory);
+}
+
+export function assertFixtureResult({
+  expectedPath,
+  actualPath,
+}: FixtureAssertionInput): FixtureAssertionResult {
+  for (const fileName of ['stdout.txt', 'stderr.txt', 'exit-code.txt'] as const) {
+    const expectedFilePath = path.join(expectedPath, fileName);
+    const actualFilePath = path.join(actualPath, fileName);
+    const expectedExists = fs.existsSync(expectedFilePath);
+    const actualExists = fs.existsSync(actualFilePath);
+
+    if (!expectedExists && !actualExists) {
+      continue;
+    }
+
+    if (expectedExists !== actualExists) {
+      process.stderr.write(
+        `Fixture file presence mismatch for ${fileName}: expected ${expectedExists ? 'present' : 'missing'}, actual ${
+          actualExists ? 'present' : 'missing'
+        }\n`
+      );
+      return { exitCode: 2 };
+    }
+
+    const completed = spawnSync('diff', ['-u', expectedFilePath, actualFilePath], {
+      encoding: 'utf8',
+      stdio: 'inherit',
+    });
+
+    if (completed.status === null) {
+      throw new Error(
+        `diff command did not exit normally: ${formatCompletedCommand(
+          'diff',
+          ['-u', expectedFilePath, actualFilePath],
+          completed
+        )}`
+      );
+    }
+
+    if (completed.status !== 0) {
+      return { exitCode: completed.status };
+    }
+  }
+
+  return { exitCode: 0 };
+}
+
+function runCommand(commands: string[], workingDirectory: string): DetailedCommandResult {
+  const completed = spawnSync(commands[0], commands.slice(1), {
+    cwd: workingDirectory,
     encoding: 'utf8',
   });
 
@@ -81,60 +281,29 @@ function runNonInteractiveCommand(commandPlan, outputPaths) {
   };
 }
 
-async function runInteractiveCommand(commandPlan, outputPaths) {
-  const child = spawn(commandPlan.command[0], commandPlan.command.slice(1), {
-    cwd: outputPaths.workspaceDir,
-    detached: true,
-    stdio: ['pipe', 'pipe', 'pipe'],
-  });
+async function runInteractiveFixtureCommand(
+  commandPlan: CommandPlan,
+  workingDirectory: string
+): Promise<DetailedCommandResult> {
+  const detailedResult = await runInteractiveCommand(commandPlan, workingDirectory);
+  assertProcessDidExit(commandPlan, detailedResult);
+  return detailedResult;
+}
+
+async function runInteractiveCommand(
+  commandPlan: CommandPlan,
+  workingDirectory: string
+): Promise<DetailedCommandResult> {
+  const child = spawnInteractiveProcess(commandPlan, workingDirectory);
   const closePromise = waitForChildClose(child);
-
-  child.stdout.setEncoding('utf8');
-  child.stderr.setEncoding('utf8');
-
-  let stdout = '';
-  let stderr = '';
-  let aborted = false;
-  let timedOut = false;
-
-  child.stdout.on('data', (chunk) => {
-    stdout += chunk;
-  });
-
-  child.stderr.on('data', (chunk) => {
-    stderr += chunk;
-  });
-
-  for (const instruction of commandPlan.instructions) {
-    if (instruction.value === '^C') {
-      aborted = true;
-      await waitForOutputToSettle(child, () => stdout.length);
-      interruptProcessGroup(child.pid);
-      break;
-    }
-
-    child.stdin.write(decodeInstruction(instruction.value, commandPlan.stdinPath, instruction.lineNumber));
-    await waitForOutputToSettle(child, () => stdout.length);
-
-    if (child.exitCode !== null) {
-      break;
-    }
-  }
-
-  if (!aborted && child.exitCode === null) {
-    child.stdin.end();
-
-    if (!(await waitForProcessExit(child, PROCESS_EXIT_TIMEOUT_MS))) {
-      timedOut = true;
-      interruptProcessGroup(child.pid);
-    }
-  }
-
+  const output = collectChildOutput(child);
+  const aborted = await applyInteractiveInstructions(child, commandPlan, output);
+  const timedOut = await finishInteractiveProcess(child, aborted);
   const closeDetails = await closePromise;
 
   return {
-    stdout,
-    stderr,
+    stdout: renderTerminalOutput(output.stdout),
+    stderr: renderTerminalOutput(output.stderr),
     exitCode: closeDetails.code,
     signalCode: closeDetails.signal,
     aborted,
@@ -142,7 +311,7 @@ async function runInteractiveCommand(commandPlan, outputPaths) {
   };
 }
 
-function validateCommandResult(result, commandPlan) {
+function assertProcessDidExit(commandPlan: CommandPlan, result: DetailedCommandResult) {
   if (result.timedOut) {
     const lastInstruction = commandPlan.instructions.at(-1);
     const lineNumber = lastInstruction?.lineNumber ?? 1;
@@ -151,50 +320,16 @@ function validateCommandResult(result, commandPlan) {
       `${commandPlan.stdinPath}:${lineNumber}: process did not exit after scripted input; add ^C or explicit submit input such as \\n`
     );
   }
-
-  const expectedExitCode = readExpectedExitCode(commandPlan.fixtureDir);
-  const actualExitCode = getActualExitCode(result);
-
-  if (actualExitCode !== expectedExitCode) {
-    throw new Error(
-      `${commandPlan.fixtureDir}/exit-code.txt: expected ${expectedExitCode}, received ${actualExitCode}`
-    );
-  }
 }
 
-function assertFixtureOutputs(fixtureDir, outputPaths) {
-  runDiff(path.join(fixtureDir, 'stdout.txt'), outputPaths.stdoutPath);
-
-  const expectedStderrPath = path.join(fixtureDir, 'stderr.txt');
-  const actualStderr = fs.readFileSync(outputPaths.stderrPath, 'utf8');
-
-  if (fs.existsSync(expectedStderrPath)) {
-    runDiff(expectedStderrPath, outputPaths.stderrPath);
-    return;
-  }
-
-  if (actualStderr.length > 0) {
-    throw new Error(`Unexpected stderr output for ${fixtureDir}\n${actualStderr}`);
-  }
-}
-
-function createContext(workspaceRoot, testsPath) {
-  const testsDir = path.basename(testsPath) === 'tests' ? testsPath : path.dirname(testsPath);
+function createContext(workspaceRoot: string, testsPath: string): FixtureContext {
+  const testsDir = path.basename(testsPath) === TESTS_DIRECTORY_NAME ? testsPath : path.dirname(testsPath);
   const packageDir = path.dirname(testsDir);
+  const packageContext = PACKAGE_CONTEXTS[path.basename(packageDir)];
 
-  if (path.basename(packageDir) === 'cli') {
+  if (packageContext) {
     return {
-      interactive: true,
-      commandName: 'openspec-diff',
-      workspaceRoot,
-      packageDir,
-    };
-  }
-
-  if (path.basename(packageDir) === 'core') {
-    return {
-      interactive: false,
-      commandName: 'openspec-difftool',
+      ...packageContext,
       workspaceRoot,
       packageDir,
     };
@@ -203,29 +338,47 @@ function createContext(workspaceRoot, testsPath) {
   throw new Error(`Unsupported tests directory: ${testsPath}`);
 }
 
-function prepareFixtureWorkspace(context, fixtureDir, tempDir) {
-  const workspaceDir = tempDir;
-  const tempOpenSpecDir = path.join(tempDir, 'openspec');
-  const stdoutPath = path.join(tempDir, 'stdout.txt');
-  const stderrPath = path.join(tempDir, 'stderr.txt');
+function prepareFixtureWorkspace(context: FixtureContext, fixtureDir: string, tempDir: string): OutputPaths {
+  const actualDir = tempDir;
+  const workspaceDir = path.join(tempDir, 'workspace');
+  const tempOpenSpecDir = path.join(workspaceDir, 'openspec');
+  const stdoutPath = path.join(actualDir, 'stdout.txt');
+  const stderrPath = path.join(actualDir, 'stderr.txt');
+  const exitCodePath = path.join(actualDir, 'exit-code.txt');
 
   fs.cpSync(path.join(fixtureDir, 'openspec'), tempOpenSpecDir, { recursive: true });
   initializeGitWorkspace(workspaceDir);
 
   return {
+    actualDir,
     workspaceDir,
     stdoutPath,
     stderrPath,
+    exitCodePath,
     commandPath: getCommandPath(context),
   };
 }
 
-function parseFixturePlan(fixtureDir, commandPath, commandName, interactive) {
-  const stdinPath = path.join(fixtureDir, 'stdin.txt');
-  const instructions = [];
-  let command = null;
+function spawnInteractiveProcess(commandPlan: CommandPlan, workspaceDir: string) {
+  return spawn(commandPlan.command[0], commandPlan.command.slice(1), {
+    cwd: workspaceDir,
+    detached: true,
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+}
 
-  for (const entry of getInstructionLines(stdinPath)) {
+function parseFixturePlan(
+  fixtureDir: string,
+  stdin: string,
+  commandPath: string,
+  commandName: string,
+  interactive: boolean
+): CommandPlan {
+  const stdinPath = path.join(fixtureDir, 'stdin.txt');
+  const instructions: FixtureInstruction[] = [];
+  let command: string[] | null = null;
+
+  for (const entry of getInstructionLines(stdin, stdinPath)) {
     if (command === null) {
       const invocation = parseInvocation(entry.value, stdinPath, entry.lineNumber);
 
@@ -254,19 +407,29 @@ function parseFixturePlan(fixtureDir, commandPath, commandName, interactive) {
     stdinPath,
     command,
     instructions,
+    interactive,
   };
 }
 
-function writeCommandOutputs(fixtureDir, outputPaths, result) {
-  fs.writeFileSync(outputPaths.stdoutPath, normalizeOutput(result.stdout), 'utf8');
-  fs.writeFileSync(outputPaths.stderrPath, normalizeFixturePaths(result.stderr, outputPaths.workspaceDir, fixtureDir), 'utf8');
+function writeCommandOutputs(
+  outputPaths: Pick<OutputPaths, 'stdoutPath' | 'stderrPath' | 'exitCodePath'>,
+  result: DetailedCommandResult
+) {
+  const exitCode = getActualExitCode(result);
+
+  fs.writeFileSync(outputPaths.stdoutPath, result.stdout, 'utf8');
+
+  if (exitCode !== 0) {
+    fs.writeFileSync(outputPaths.stderrPath, result.stderr, 'utf8');
+    fs.writeFileSync(outputPaths.exitCodePath, `${exitCode}`, 'utf8');
+  }
 }
 
-function normalizeFixturePaths(value, workspaceDir, fixtureDir) {
-  return value.split(workspaceDir).join(fixtureDir);
+function getWorkspaceRoot(moduleUrl: string) {
+  return path.dirname(fileURLToPath(moduleUrl));
 }
 
-function getTestsPath(argv) {
+function getTestsPath(argv: string[]) {
   const targetPath = argv[2];
 
   if (!targetPath) {
@@ -276,7 +439,7 @@ function getTestsPath(argv) {
   return path.resolve(targetPath);
 }
 
-function getFixtureDirectories(testsPath) {
+function getFixtureDirectories(testsPath: string) {
   if (isFixtureDirectory(testsPath)) {
     return [testsPath];
   }
@@ -289,17 +452,17 @@ function getFixtureDirectories(testsPath) {
     .sort((left, right) => left.localeCompare(right));
 }
 
-function isFixtureDirectory(candidatePath) {
+function isFixtureDirectory(candidatePath: string) {
   return fs.existsSync(path.join(candidatePath, 'openspec')) && fs.existsSync(path.join(candidatePath, 'stdin.txt'));
 }
 
-function ensurePathExists(targetPath) {
+function ensurePathExists(targetPath: string) {
   if (!fs.existsSync(targetPath)) {
     throw new Error(`Path does not exist: ${targetPath}`);
   }
 }
 
-function ensureFixtureInputs(fixtureDir) {
+function ensureFixtureInputs(fixtureDir: string) {
   const stdinPath = path.join(fixtureDir, 'stdin.txt');
 
   if (!fs.existsSync(stdinPath)) {
@@ -307,24 +470,20 @@ function ensureFixtureInputs(fixtureDir) {
   }
 }
 
-function initializeGitWorkspace(workspaceDir) {
+function initializeGitWorkspace(workspaceDir: string) {
   runCheckedCommand('git', ['-C', workspaceDir, 'init', '-q']);
   runCheckedCommand('git', ['-C', workspaceDir, 'config', 'diff.tool', 'terminaldiff']);
   runCheckedCommand('git', ['-C', workspaceDir, 'config', 'difftool.prompt', 'false']);
   runCheckedCommand('git', ['-C', workspaceDir, 'config', 'difftool.terminaldiff.cmd', 'diff "$LOCAL" "$REMOTE"']);
 }
 
-function getCommandPath(context) {
-  if (context.interactive) {
-    return path.join(context.packageDir, 'bin', 'openspec-diff');
-  }
-
-  return path.join(context.workspaceRoot, 'dist', 'target', 'core', 'debug', 'openspec-difftool');
+function getCommandPath(context: FixtureContext) {
+  return context.resolveCommandPath(context);
 }
 
-function getInstructionLines(stdinPath) {
-  const lines = fs.readFileSync(stdinPath, 'utf8').split(/\r?\n/);
-  const instructions = [];
+function getInstructionLines(stdin: string, stdinPath: string): FixtureInstruction[] {
+  const lines = stdin.split(/\r?\n/);
+  const instructions: FixtureInstruction[] = [];
 
   for (const [index, rawLine] of lines.entries()) {
     const value = stripInlineComment(rawLine);
@@ -337,39 +496,19 @@ function getInstructionLines(stdinPath) {
   return instructions;
 }
 
-function parseInvocation(value, stdinPath, lineNumber) {
-  const tokens = [];
+function parseInvocation(value: string, stdinPath: string, lineNumber: number) {
+  const tokens: string[] = [];
   let current = '';
-  let escaped = false;
-  let quote = null;
+  const scanner = createShellScanner();
 
   for (const char of value) {
-    if (escaped) {
-      current += char;
-      escaped = false;
+    const scanned = scanShellCharacter(scanner, char);
+
+    if (scanned.char === null) {
       continue;
     }
 
-    if (char === '\\' && quote !== "'") {
-      escaped = true;
-      continue;
-    }
-
-    if (quote) {
-      if (char === quote) {
-        quote = null;
-      } else {
-        current += char;
-      }
-      continue;
-    }
-
-    if (char === '"' || char === "'") {
-      quote = char;
-      continue;
-    }
-
-    if (/\s/.test(char)) {
+    if (!scanned.protected && /\s/.test(scanned.char)) {
       if (current) {
         tokens.push(current);
         current = '';
@@ -377,10 +516,10 @@ function parseInvocation(value, stdinPath, lineNumber) {
       continue;
     }
 
-    current += char;
+    current += scanned.char;
   }
 
-  if (escaped || quote) {
+  if (hasOpenShellToken(scanner)) {
     throw new Error(`${stdinPath}:${lineNumber}: invalid CLI invocation in stdin.txt`);
   }
 
@@ -395,36 +534,13 @@ function parseInvocation(value, stdinPath, lineNumber) {
   return tokens;
 }
 
-function stripInlineComment(value) {
-  let escaped = false;
-  let quote = null;
+function stripInlineComment(value: string) {
+  const scanner = createShellScanner();
 
   for (let index = 0; index < value.length; index += 1) {
-    const char = value[index];
+    const scanned = scanShellCharacter(scanner, value[index]);
 
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-
-    if (char === '\\') {
-      escaped = true;
-      continue;
-    }
-
-    if (quote) {
-      if (char === quote) {
-        quote = null;
-      }
-      continue;
-    }
-
-    if (char === '"' || char === "'") {
-      quote = char;
-      continue;
-    }
-
-    if (char === '#') {
+    if (!scanned.protected && scanned.char === '#') {
       return value.slice(0, index).trimEnd();
     }
   }
@@ -432,7 +548,43 @@ function stripInlineComment(value) {
   return value.trim();
 }
 
-function decodeInstruction(value, stdinPath, lineNumber) {
+function createShellScanner(): { escaped: boolean; quote: '"' | "'" | null } {
+  return { escaped: false, quote: null };
+}
+
+function scanShellCharacter(scanner: { escaped: boolean; quote: '"' | "'" | null }, char: string) {
+  if (scanner.escaped) {
+    scanner.escaped = false;
+    return { char, protected: true };
+  }
+
+  if (char === '\\' && scanner.quote !== "'") {
+    scanner.escaped = true;
+    return { char: null, protected: scanner.quote !== null };
+  }
+
+  if (scanner.quote) {
+    if (char === scanner.quote) {
+      scanner.quote = null;
+      return { char: null, protected: true };
+    }
+
+    return { char, protected: true };
+  }
+
+  if (char === '"' || char === "'") {
+    scanner.quote = char;
+    return { char: null, protected: false };
+  }
+
+  return { char, protected: false };
+}
+
+function hasOpenShellToken(scanner: { escaped: boolean; quote: '"' | "'" | null }) {
+  return scanner.escaped || scanner.quote !== null;
+}
+
+function decodeInstruction(value: string, stdinPath: string, lineNumber: number) {
   try {
     return value.replace(
       /\\(?:u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|([0-7]{1,3})|([\\'"abfnrtv]))/g,
@@ -444,7 +596,13 @@ function decodeInstruction(value, stdinPath, lineNumber) {
   }
 }
 
-function decodeEscape(match, unicodeHex, asciiHex, octalDigits, escapedChar) {
+function decodeEscape(
+  match: string,
+  unicodeHex?: string,
+  asciiHex?: string,
+  octalDigits?: string,
+  escapedChar?: string
+) {
   if (unicodeHex) {
     return String.fromCharCode(Number.parseInt(unicodeHex, 16));
   }
@@ -460,7 +618,7 @@ function decodeEscape(match, unicodeHex, asciiHex, octalDigits, escapedChar) {
   return getSimpleEscapeMap()[escapedChar] ?? match;
 }
 
-function getSimpleEscapeMap() {
+function getSimpleEscapeMap(): Record<string, string> {
   return {
     '\\': '\\',
     '"': '"',
@@ -475,12 +633,235 @@ function getSimpleEscapeMap() {
   };
 }
 
-function normalizeOutput(value) {
-  const lastScreenState = value.includes('\u001b[J') ? value.split('\u001b[J').at(-1) : value;
-  return lastScreenState.replace(/\u001b\[\d+A/g, '');
+function collectChildOutput(child: ReturnType<typeof spawn>) {
+  const output = { stdout: '', stderr: '' };
+
+  child.stdout.setEncoding('utf8');
+  child.stderr.setEncoding('utf8');
+  child.stdout.on('data', (chunk) => {
+    output.stdout += chunk;
+  });
+  child.stderr.on('data', (chunk) => {
+    output.stderr += chunk;
+  });
+
+  return output;
 }
 
-async function waitForOutputToSettle(child, getLength) {
+function renderTerminalOutput(raw: string) {
+  if (!raw.includes('\u001b[') && !raw.includes('\r')) {
+    return raw;
+  }
+
+  const lines = [''];
+  const cursor = { row: 0, column: 0 };
+  let index = 0;
+
+  while (index < raw.length) {
+    const controlSequence = matchControlSequence(raw, index);
+
+    if (controlSequence) {
+      applyControlSequence(lines, cursor, controlSequence);
+      index = controlSequence.nextIndex;
+      continue;
+    }
+
+    const char = raw[index];
+
+    if (char === '\n') {
+      cursor.row += 1;
+      cursor.column = 0;
+      ensureScreenLine(lines, cursor.row);
+      index += 1;
+      continue;
+    }
+
+    if (char === '\r') {
+      cursor.column = 0;
+      index += 1;
+      continue;
+    }
+
+    writeScreenCharacter(lines, cursor, char);
+    index += 1;
+  }
+
+  while (lines.length > 0 && lines.at(-1) === '') {
+    lines.pop();
+  }
+
+  return lines.join('\n');
+}
+
+function matchControlSequence(raw: string, index: number) {
+  const match = raw.slice(index).match(/^\u001b\[([0-9;?]*)([A-Za-z])/);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    command: match[2],
+    params: match[1],
+    nextIndex: index + match[0].length,
+  };
+}
+
+function applyControlSequence(
+  lines: string[],
+  cursor: { row: number; column: number },
+  controlSequence: { command: string; params: string; nextIndex: number }
+) {
+  const params = parseControlSequenceParams(controlSequence.params);
+
+  switch (controlSequence.command) {
+    case 'A':
+      cursor.row = Math.max(0, cursor.row - getControlSequenceCount(params));
+      break;
+    case 'B':
+      cursor.row += getControlSequenceCount(params);
+      ensureScreenLine(lines, cursor.row);
+      break;
+    case 'C':
+      cursor.column += getControlSequenceCount(params);
+      break;
+    case 'D':
+      cursor.column = Math.max(0, cursor.column - getControlSequenceCount(params));
+      break;
+    case 'H':
+    case 'f':
+      cursor.row = Math.max(0, (params[0] ?? 1) - 1);
+      cursor.column = Math.max(0, (params[1] ?? 1) - 1);
+      ensureScreenLine(lines, cursor.row);
+      break;
+    case 'J':
+      eraseDisplay(lines, cursor, params[0] ?? 0);
+      break;
+    case 'K':
+      eraseLine(lines, cursor, params[0] ?? 0);
+      break;
+    case 'm':
+      break;
+    default:
+      break;
+  }
+}
+
+function parseControlSequenceParams(params: string) {
+  if (params === '') {
+    return [];
+  }
+
+  return params.split(';').map((value) => {
+    const parsed = Number.parseInt(value.replace(/\?/g, ''), 10);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  });
+}
+
+function getControlSequenceCount(params: number[]) {
+  const value = params[0] ?? 0;
+  return value === 0 ? 1 : value;
+}
+
+function eraseDisplay(lines: string[], cursor: { row: number; column: number }, mode: number) {
+  ensureScreenLine(lines, cursor.row);
+
+  if (mode === 1) {
+    for (let index = 0; index < cursor.row; index += 1) {
+      lines[index] = '';
+    }
+
+    lines[cursor.row] = `${' '.repeat(cursor.column)}${lines[cursor.row].slice(cursor.column)}`;
+    return;
+  }
+
+  if (mode === 2) {
+    lines.splice(0, lines.length, '');
+    cursor.row = 0;
+    cursor.column = 0;
+    return;
+  }
+
+  lines[cursor.row] = lines[cursor.row].slice(0, cursor.column);
+  lines.splice(cursor.row + 1);
+}
+
+function eraseLine(lines: string[], cursor: { row: number; column: number }, mode: number) {
+  ensureScreenLine(lines, cursor.row);
+
+  if (mode === 1) {
+    lines[cursor.row] = `${' '.repeat(cursor.column)}${lines[cursor.row].slice(cursor.column)}`;
+    return;
+  }
+
+  if (mode === 2) {
+    lines[cursor.row] = '';
+    cursor.column = 0;
+    return;
+  }
+
+  lines[cursor.row] = lines[cursor.row].slice(0, cursor.column);
+}
+
+function writeScreenCharacter(lines: string[], cursor: { row: number; column: number }, char: string) {
+  ensureScreenLine(lines, cursor.row);
+  const line = lines[cursor.row];
+  const padding = line.length < cursor.column ? ' '.repeat(cursor.column - line.length) : '';
+  const paddedLine = `${line}${padding}`;
+
+  if (cursor.column < paddedLine.length) {
+    lines[cursor.row] = `${paddedLine.slice(0, cursor.column)}${char}${paddedLine.slice(cursor.column + 1)}`;
+  } else {
+    lines[cursor.row] = `${paddedLine}${char}`;
+  }
+
+  cursor.column += 1;
+}
+
+function ensureScreenLine(lines: string[], row: number) {
+  while (lines.length <= row) {
+    lines.push('');
+  }
+}
+
+async function applyInteractiveInstructions(
+  child: ReturnType<typeof spawn>,
+  commandPlan: CommandPlan,
+  output: { stdout: string; stderr: string }
+) {
+  for (const instruction of commandPlan.instructions) {
+    if (instruction.value === '^C') {
+      await waitForOutputToSettle(child, () => output.stdout.length);
+      interruptProcessGroup(child.pid);
+      return true;
+    }
+
+    child.stdin.write(decodeInstruction(instruction.value, commandPlan.stdinPath, instruction.lineNumber));
+    await waitForOutputToSettle(child, () => output.stdout.length);
+
+    if (child.exitCode !== null) {
+      break;
+    }
+  }
+
+  return false;
+}
+
+async function finishInteractiveProcess(child: ReturnType<typeof spawn>, aborted: boolean) {
+  if (aborted || child.exitCode !== null) {
+    return false;
+  }
+
+  child.stdin.end();
+  if (await waitForProcessExit(child, PROCESS_EXIT_TIMEOUT_MS)) {
+    return false;
+  }
+
+  interruptProcessGroup(child.pid);
+  return true;
+}
+
+async function waitForOutputToSettle(child: ReturnType<typeof spawn>, getLength: () => number) {
   let previousLength = getLength();
   let idleDeadline = Date.now() + OUTPUT_IDLE_TIMEOUT_MS;
   const overallDeadline = Date.now() + MAX_OUTPUT_SETTLE_MS;
@@ -515,7 +896,7 @@ async function waitForOutputToSettle(child, getLength) {
   }
 }
 
-function waitForProcessExit(child, timeoutMs) {
+function waitForProcessExit(child: ReturnType<typeof spawn>, timeoutMs: number) {
   if (child.exitCode !== null) {
     return Promise.resolve(true);
   }
@@ -529,14 +910,14 @@ function waitForProcessExit(child, timeoutMs) {
   });
 }
 
-function waitForChildClose(child) {
+function waitForChildClose(child: ReturnType<typeof spawn>): Promise<{ code: number | null; signal: NodeJS.Signals | null }> {
   return new Promise((resolve, reject) => {
     child.once('error', reject);
     child.once('close', (code, signal) => resolve({ code, signal }));
   });
 }
 
-function interruptProcessGroup(pid) {
+function interruptProcessGroup(pid: number) {
   try {
     process.kill(-pid, 'SIGINT');
   } catch (error) {
@@ -546,11 +927,11 @@ function interruptProcessGroup(pid) {
   }
 }
 
-function sleep(delayMs) {
+function sleep(delayMs: number) {
   return new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
-function runCheckedCommand(command, args) {
+function runCheckedCommand(command: string, args: string[]) {
   const completed = spawnSync(command, args, { encoding: 'utf8' });
 
   if (completed.status === 0) {
@@ -560,36 +941,7 @@ function runCheckedCommand(command, args) {
   throw new Error(formatCompletedCommand(command, args, completed));
 }
 
-function runDiff(expectedPath, actualPath) {
-  const completed = spawnSync('diff', ['-u', expectedPath, actualPath], {
-    encoding: 'utf8',
-    stdio: 'inherit',
-  });
-
-  if (completed.status === 0) {
-    return;
-  }
-
-  throw new Error(`Output mismatch: ${expectedPath} vs ${actualPath}`);
-}
-
-function readExpectedExitCode(fixtureDir) {
-  const exitCodePath = path.join(fixtureDir, 'exit-code.txt');
-
-  if (!fs.existsSync(exitCodePath)) {
-    return 0;
-  }
-
-  const value = fs.readFileSync(exitCodePath, 'utf8').trim();
-
-  if (!/^(0|[1-9]\d*)$/.test(value)) {
-    throw new Error(`${exitCodePath}: expected a single non-negative integer exit code`);
-  }
-
-  return Number.parseInt(value, 10);
-}
-
-function getActualExitCode(result) {
+function getActualExitCode(result: Pick<DetailedCommandResult, 'exitCode' | 'signalCode'>) {
   if (typeof result.exitCode === 'number') {
     return result.exitCode;
   }
@@ -601,7 +953,7 @@ function getActualExitCode(result) {
   throw new Error('Command exited without an exit code or signal');
 }
 
-function getSignalNumber(signalCode) {
+function getSignalNumber(signalCode: NodeJS.Signals) {
   const signalNumber = os.constants.signals[signalCode];
 
   if (signalNumber === undefined) {
@@ -611,17 +963,21 @@ function getSignalNumber(signalCode) {
   return signalNumber;
 }
 
-function formatFailures(failures) {
-  return failures.map((failure) => `${failure.fixtureDir}\n${failure.message}`).join('\n\n');
+function formatFailureList(failures: FixtureFailure[]) {
+  return failures.map((failure, index) => `- x ${index + 1}) ${failure.fixtureDir}`).join('\n');
 }
 
-function formatCompletedCommand(command, args, completed) {
+function formatCompletedCommand(command: string, args: string[], completed: ReturnType<typeof spawnSync>) {
   const stderr = completed.stderr ? `\n${completed.stderr}` : '';
   return `Command failed: ${command} ${args.join(' ')}${stderr}`;
 }
 
-function handleFatalError(error) {
+function handleFatalError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   console.error(message);
   process.exit(1);
+}
+
+if (import.meta.main) {
+  main().catch(handleFatalError);
 }
