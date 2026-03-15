@@ -1,4 +1,10 @@
 ? Select a change to diff
+❯ digital-wallet
+  real-time-tracking
+  single-sign-on
+
+↑↓ navigate • ⏎ select
+[6A[J? Select a change to diff
   digital-wallet
 ❯ real-time-tracking
   single-sign-on

@@ -15,7 +15,7 @@ const TESTS_DIRECTORY_NAME = 'tests';
 type FixtureFailure = { fixtureDir: string; message: string };
 type FixtureInstruction = { lineNumber: number; value: string };
 type CommandRunnerInput = { stdin: string; path: string };
-type CommandResult = { stdout: string; stderr: string; exitCode: number };
+type CommandResult = { path: string };
 type FixtureAssertionInput = { expectedPath: string; actualPath: string };
 type FixtureAssertionResult = { exitCode: number };
 type DetailedCommandResult = {
@@ -40,9 +40,11 @@ type CommandPlan = {
   interactive: boolean;
 };
 type OutputPaths = {
+  actualDir: string;
   workspaceDir: string;
   stdoutPath: string;
   stderrPath: string;
+  exitCodePath: string;
   commandPath: string;
 };
 
@@ -66,28 +68,21 @@ async function main(argv = process.argv) {
   const fixtureFailures: FixtureFailure[] = [];
 
   for (const fixtureDir of getFixtureDirectories(testsPath)) {
-    const actualDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openspec-diff-actual-'));
+    let actualPath: string | null = null;
 
     try {
       const result = await runFixtureCommand({
         stdin: fs.readFileSync(path.join(fixtureDir, 'stdin.txt'), 'utf8'),
         path: fixtureDir,
       });
-      const stdoutPath = path.join(actualDir, 'stdout.txt');
-      const stderrPath = path.join(actualDir, 'stderr.txt');
+      actualPath = result.path;
+      const assertion = assertFixtureResult({
+        expectedPath: fixtureDir,
+        actualPath,
+      });
 
-      fs.writeFileSync(stdoutPath, result.stdout, 'utf8');
-      fs.writeFileSync(stderrPath, result.stderr, 'utf8');
-
-      assertExitCode(fixtureDir, result.exitCode);
-      assertDiffMatches(path.join(fixtureDir, 'stdout.txt'), stdoutPath);
-
-      const expectedStderrPath = path.join(fixtureDir, 'stderr.txt');
-
-      if (fs.existsSync(expectedStderrPath)) {
-        assertDiffMatches(expectedStderrPath, stderrPath);
-      } else if (result.stderr.length > 0) {
-        throw new Error(`Unexpected stderr output for ${fixtureDir}\n${result.stderr}`);
+      if (assertion.exitCode !== 0) {
+        throw new Error(`Fixture assertion failed for ${fixtureDir}`);
       }
 
       process.stdout.write('.');
@@ -98,7 +93,9 @@ async function main(argv = process.argv) {
         message: error instanceof Error ? error.message : String(error),
       });
     } finally {
-      fs.rmSync(actualDir, { recursive: true, force: true });
+      if (actualPath) {
+        fs.rmSync(actualPath, { recursive: true, force: true });
+      }
     }
   }
 
@@ -144,20 +141,18 @@ async function executeFixture(context: FixtureContext, fixtureDir: string): Prom
       fixtureDir,
       workspaceRoot: context.workspaceRoot,
     });
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openspec-diff-actual-'));
 
     try {
-      validateFixtureResult({
-        fixtureDir,
-        outputPaths: {
-          workspaceDir: fixtureDir,
-          stdoutPath: path.join(tempDir, 'stdout.txt'),
-          stderrPath: path.join(tempDir, 'stderr.txt'),
-        },
-        result,
+      const assertion = assertFixtureResult({
+        expectedPath: fixtureDir,
+        actualPath: result.path,
       });
+
+      if (assertion.exitCode !== 0) {
+        throw new Error(`Fixture assertion failed for ${fixtureDir}`);
+      }
     } finally {
-      fs.rmSync(tempDir, { recursive: true, force: true });
+      fs.rmSync(result.path, { recursive: true, force: true });
     }
 
     return null;
@@ -189,6 +184,7 @@ async function runFixtureCommandInWorkspace({
 }): Promise<CommandResult> {
   const context = createContext(workspaceRoot, fixtureDir);
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openspec-diff-test-'));
+  let keepTempDir = false;
 
   try {
     ensureFixtureInputs(fixtureDir);
@@ -202,20 +198,22 @@ async function runFixtureCommandInWorkspace({
       context.interactive
     );
     const result = await runPlannedFixtureCommand(commandPlan, outputPaths.workspaceDir);
+    writeCommandOutputs(outputPaths, result);
+    keepTempDir = true;
 
     return {
-      stdout: normalizeOutput(result.stdout),
-      stderr: normalizeFixturePaths(result.stderr, outputPaths.workspaceDir, fixtureDir),
-      exitCode: result.exitCode,
+      path: outputPaths.actualDir,
     };
   } finally {
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    if (!keepTempDir) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   }
 }
 
-function runPlannedFixtureCommand(commandPlan: CommandPlan, workingDirectory: string): Promise<CommandResult> {
+function runPlannedFixtureCommand(commandPlan: CommandPlan, workingDirectory: string): Promise<DetailedCommandResult> {
   if (!commandPlan.interactive) {
-    return Promise.resolve(createCommandResult(runCommand(commandPlan.command, workingDirectory)));
+    return Promise.resolve(runCommand(commandPlan.command, workingDirectory));
   }
 
   return runInteractiveFixtureCommand(commandPlan, workingDirectory);
@@ -225,32 +223,35 @@ export function assertFixtureResult({
   expectedPath,
   actualPath,
 }: FixtureAssertionInput): FixtureAssertionResult {
-  const completed = spawnSync('diff', ['-u', expectedPath, actualPath], {
-    encoding: 'utf8',
-    stdio: 'inherit',
-  });
+  for (const fileName of ['stdout.txt', 'stderr.txt', 'exit-code.txt'] as const) {
+    const expectedFilePath = path.join(expectedPath, fileName);
+    const actualFilePath = path.join(actualPath, fileName);
 
-  if (completed.status === null) {
-    throw new Error(
-      `diff command did not exit normally: ${formatCompletedCommand('diff', ['-u', expectedPath, actualPath], completed)}`
-    );
+    if (!fs.existsSync(expectedFilePath) && !fs.existsSync(actualFilePath)) {
+      continue;
+    }
+
+    const completed = spawnSync('diff', ['-u', expectedFilePath, actualFilePath], {
+      encoding: 'utf8',
+      stdio: 'inherit',
+    });
+
+    if (completed.status === null) {
+      throw new Error(
+        `diff command did not exit normally: ${formatCompletedCommand(
+          'diff',
+          ['-u', expectedFilePath, actualFilePath],
+          completed
+        )}`
+      );
+    }
+
+    if (completed.status !== 0) {
+      return { exitCode: completed.status };
+    }
   }
 
-  return { exitCode: completed.status };
-}
-
-function validateFixtureResult({
-  fixtureDir,
-  outputPaths,
-  result,
-}: {
-  fixtureDir: string;
-  outputPaths: Pick<OutputPaths, 'workspaceDir' | 'stdoutPath' | 'stderrPath'>;
-  result: CommandResult;
-}) {
-  writeCommandOutputs(fixtureDir, outputPaths, result);
-  assertExitCode(fixtureDir, result.exitCode);
-  assertOutputFiles(fixtureDir, outputPaths);
+  return { exitCode: 0 };
 }
 
 function runCommand(commands: string[], workingDirectory: string): DetailedCommandResult {
@@ -272,10 +273,10 @@ function runCommand(commands: string[], workingDirectory: string): DetailedComma
 async function runInteractiveFixtureCommand(
   commandPlan: CommandPlan,
   workingDirectory: string
-): Promise<CommandResult> {
+): Promise<DetailedCommandResult> {
   const detailedResult = await runInteractiveCommand(commandPlan, workingDirectory);
   assertProcessDidExit(commandPlan, detailedResult);
-  return createCommandResult(detailedResult);
+  return detailedResult;
 }
 
 async function runInteractiveCommand(
@@ -310,41 +311,6 @@ function assertProcessDidExit(commandPlan: CommandPlan, result: DetailedCommandR
   }
 }
 
-function createCommandResult(result: DetailedCommandResult): CommandResult {
-  return {
-    stdout: result.stdout,
-    stderr: result.stderr,
-    exitCode: getActualExitCode(result),
-  };
-}
-
-function assertExitCode(fixtureDir: string, actualExitCode: number) {
-  const expectedExitCode = readExpectedExitCode(fixtureDir);
-
-  if (actualExitCode !== expectedExitCode) {
-    throw new Error(`${fixtureDir}/exit-code.txt: expected ${expectedExitCode}, received ${actualExitCode}`);
-  }
-}
-
-function assertOutputFiles(
-  fixtureDir: string,
-  outputPaths: Pick<OutputPaths, 'stdoutPath' | 'stderrPath'>
-) {
-  assertDiffMatches(path.join(fixtureDir, 'stdout.txt'), outputPaths.stdoutPath);
-
-  const expectedStderrPath = path.join(fixtureDir, 'stderr.txt');
-  const actualStderr = fs.readFileSync(outputPaths.stderrPath, 'utf8');
-
-  if (fs.existsSync(expectedStderrPath)) {
-    assertDiffMatches(expectedStderrPath, outputPaths.stderrPath);
-    return;
-  }
-
-  if (actualStderr.length > 0) {
-    throw new Error(`Unexpected stderr output for ${fixtureDir}\n${actualStderr}`);
-  }
-}
-
 function createContext(workspaceRoot: string, testsPath: string): FixtureContext {
   const testsDir = path.basename(testsPath) === TESTS_DIRECTORY_NAME ? testsPath : path.dirname(testsPath);
   const packageDir = path.dirname(testsDir);
@@ -362,18 +328,22 @@ function createContext(workspaceRoot: string, testsPath: string): FixtureContext
 }
 
 function prepareFixtureWorkspace(context: FixtureContext, fixtureDir: string, tempDir: string): OutputPaths {
-  const workspaceDir = tempDir;
-  const tempOpenSpecDir = path.join(tempDir, 'openspec');
-  const stdoutPath = path.join(tempDir, 'stdout.txt');
-  const stderrPath = path.join(tempDir, 'stderr.txt');
+  const actualDir = tempDir;
+  const workspaceDir = path.join(tempDir, 'workspace');
+  const tempOpenSpecDir = path.join(workspaceDir, 'openspec');
+  const stdoutPath = path.join(actualDir, 'stdout.txt');
+  const stderrPath = path.join(actualDir, 'stderr.txt');
+  const exitCodePath = path.join(actualDir, 'exit-code.txt');
 
   fs.cpSync(path.join(fixtureDir, 'openspec'), tempOpenSpecDir, { recursive: true });
   initializeGitWorkspace(workspaceDir);
 
   return {
+    actualDir,
     workspaceDir,
     stdoutPath,
     stderrPath,
+    exitCodePath,
     commandPath: getCommandPath(context),
   };
 }
@@ -431,16 +401,17 @@ function parseFixturePlan(
 }
 
 function writeCommandOutputs(
-  fixtureDir: string,
-  outputPaths: Pick<OutputPaths, 'workspaceDir' | 'stdoutPath' | 'stderrPath'>,
-  result: CommandResult
+  outputPaths: Pick<OutputPaths, 'stdoutPath' | 'stderrPath' | 'exitCodePath'>,
+  result: DetailedCommandResult
 ) {
-  fs.writeFileSync(outputPaths.stdoutPath, normalizeOutput(result.stdout), 'utf8');
-  fs.writeFileSync(outputPaths.stderrPath, normalizeFixturePaths(result.stderr, outputPaths.workspaceDir, fixtureDir), 'utf8');
-}
+  const exitCode = getActualExitCode(result);
 
-function normalizeFixturePaths(value: string, workspaceDir: string, fixtureDir: string) {
-  return value.split(workspaceDir).join(fixtureDir);
+  fs.writeFileSync(outputPaths.stdoutPath, result.stdout, 'utf8');
+
+  if (exitCode !== 0) {
+    fs.writeFileSync(outputPaths.stderrPath, result.stderr, 'utf8');
+    fs.writeFileSync(outputPaths.exitCodePath, `${exitCode}\n`, 'utf8');
+  }
 }
 
 function getWorkspaceRoot(moduleUrl: string) {
@@ -651,11 +622,6 @@ function getSimpleEscapeMap(): Record<string, string> {
   };
 }
 
-function normalizeOutput(value: string) {
-  const lastScreenState = value.includes('\u001b[J') ? value.split('\u001b[J').at(-1) : value;
-  return lastScreenState.replace(/\u001b\[\d+A/g, '');
-}
-
 function collectChildOutput(child: ReturnType<typeof spawn>) {
   const output = { stdout: '', stderr: '' };
 
@@ -786,30 +752,6 @@ function runCheckedCommand(command: string, args: string[]) {
   }
 
   throw new Error(formatCompletedCommand(command, args, completed));
-}
-
-function assertDiffMatches(expectedPath: string, actualPath: string) {
-  if (assertFixtureResult({ expectedPath, actualPath }).exitCode === 0) {
-    return;
-  }
-
-  throw new Error(`Output mismatch: ${expectedPath} vs ${actualPath}`);
-}
-
-function readExpectedExitCode(fixtureDir: string) {
-  const exitCodePath = path.join(fixtureDir, 'exit-code.txt');
-
-  if (!fs.existsSync(exitCodePath)) {
-    return 0;
-  }
-
-  const value = fs.readFileSync(exitCodePath, 'utf8').trim();
-
-  if (!/^(0|[1-9]\d*)$/.test(value)) {
-    throw new Error(`${exitCodePath}: expected a single non-negative integer exit code`);
-  }
-
-  return Number.parseInt(value, 10);
 }
 
 function getActualExitCode(result: Pick<DetailedCommandResult, 'exitCode' | 'signalCode'>) {

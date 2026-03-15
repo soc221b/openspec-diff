@@ -46,14 +46,52 @@ function createCliFixtureWorkspace({
     fs.writeFileSync(path.join(fixtureDir, 'stderr.txt'), stderr, 'utf8');
   }
 
-  if (exitCode !== undefined) {
+  if (exitCode !== undefined && exitCode !== 0) {
     fs.writeFileSync(path.join(fixtureDir, 'exit-code.txt'), `${exitCode}\n`, 'utf8');
   }
 
   return { workspaceRoot, testsDir, fixtureDir };
 }
 
-test('runFixtureCommand captures stdout, stderr, and exit code from { stdin, path }', async () => {
+function readOutputDirectory(outputPath: string) {
+  return {
+    stdout: fs.readFileSync(path.join(outputPath, 'stdout.txt'), 'utf8'),
+    stderr: fs.existsSync(path.join(outputPath, 'stderr.txt'))
+      ? fs.readFileSync(path.join(outputPath, 'stderr.txt'), 'utf8')
+      : null,
+    exitCode: fs.existsSync(path.join(outputPath, 'exit-code.txt'))
+      ? fs.readFileSync(path.join(outputPath, 'exit-code.txt'), 'utf8')
+      : null,
+  };
+}
+
+function createAssertionDirectory({
+  prefix,
+  stdout,
+  stderr,
+  exitCode,
+}: {
+  prefix: string;
+  stdout: string;
+  stderr?: string;
+  exitCode?: string;
+}) {
+  const directoryPath = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+
+  fs.writeFileSync(path.join(directoryPath, 'stdout.txt'), stdout, 'utf8');
+
+  if (stderr !== undefined) {
+    fs.writeFileSync(path.join(directoryPath, 'stderr.txt'), stderr, 'utf8');
+  }
+
+  if (exitCode !== undefined) {
+    fs.writeFileSync(path.join(directoryPath, 'exit-code.txt'), exitCode, 'utf8');
+  }
+
+  return directoryPath;
+}
+
+test('runFixtureCommand writes real stdout, stderr, and exit code files and returns the temp directory path', async () => {
   const { workspaceRoot, fixtureDir } = createCliFixtureWorkspace({
     prefix: 'run-test-command-',
     fixtureName: 'command-fixture',
@@ -61,10 +99,11 @@ test('runFixtureCommand captures stdout, stderr, and exit code from { stdin, pat
       '#!/usr/bin/env node',
       'process.stdin.resume();',
       'process.stdin.on("data", () => {});',
-      'process.stdin.on("end", () => { process.stdout.write("out"); process.stderr.write("err"); process.exit(3); });',
+      'process.stdin.on("end", () => { process.stdout.write("\\u001b[Jout"); process.stderr.write("err"); process.exit(3); });',
     ],
     stdin: 'openspec-diff\ninput\n',
   });
+  let outputPath: string | null = null;
 
   try {
     const stdin = fs.readFileSync(path.join(fixtureDir, 'stdin.txt'), 'utf8');
@@ -72,18 +111,23 @@ test('runFixtureCommand captures stdout, stderr, and exit code from { stdin, pat
       stdin,
       path: fixtureDir,
     });
+    outputPath = result.path;
 
-    assert.deepEqual(result, {
-      stdout: 'out',
+    assert.equal(typeof result.path, 'string');
+    assert.deepEqual(readOutputDirectory(result.path), {
+      stdout: '\u001b[Jout',
       stderr: 'err',
-      exitCode: 3,
+      exitCode: '3\n',
     });
   } finally {
+    if (outputPath) {
+      fs.rmSync(outputPath, { recursive: true, force: true });
+    }
     fs.rmSync(workspaceRoot, { recursive: true, force: true });
   }
 });
 
-test('runFixtureCommand handles scripted interactive fixtures through the shared runner pipeline', async () => {
+test('runFixtureCommand writes only stdout for successful scripted interactive fixtures', async () => {
   const { workspaceRoot, fixtureDir } = createCliFixtureWorkspace({
     prefix: 'run-test-suite-',
     fixtureName: 'interactive-fixture',
@@ -98,22 +142,25 @@ test('runFixtureCommand handles scripted interactive fixtures through the shared
     stdout: 'HELLO\n',
     exitCode: 0,
   });
+  let outputPath: string | null = null;
 
   try {
     const stdin = fs.readFileSync(path.join(fixtureDir, 'stdin.txt'), 'utf8');
+    const result = await runFixtureCommand({
+      stdin,
+      path: fixtureDir,
+    });
+    outputPath = result.path;
 
-    assert.deepEqual(
-      await runFixtureCommand({
-        stdin,
-        path: fixtureDir,
-      }),
-      {
-        stdout: 'HELLO\n',
-        stderr: '',
-        exitCode: 0,
-      }
-    );
+    assert.deepEqual(readOutputDirectory(result.path), {
+      stdout: 'HELLO\n',
+      stderr: null,
+      exitCode: null,
+    });
   } finally {
+    if (outputPath) {
+      fs.rmSync(outputPath, { recursive: true, force: true });
+    }
     fs.rmSync(workspaceRoot, { recursive: true, force: true });
   }
 });
@@ -216,46 +263,57 @@ test('main prints x and exits 1 when any fixture fails', async () => {
   }
 });
 
-test('assertFixtureResult returns exitCode 0 when expected and actual files match', () => {
-  const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'run-test-assert-'));
-  const expectedPath = path.join(fixtureDir, 'expected.txt');
-  const actualPath = path.join(fixtureDir, 'actual.txt');
-
-  fs.writeFileSync(expectedPath, 'hello\n', 'utf8');
-  fs.writeFileSync(actualPath, 'hello\n', 'utf8');
+test('assertFixtureResult returns exitCode 0 when expected and actual fixture directories match', () => {
+  const expectedPath = createAssertionDirectory({
+    prefix: 'run-test-assert-expected-',
+    stdout: 'hello\n',
+  });
+  const actualPath = createAssertionDirectory({
+    prefix: 'run-test-assert-actual-',
+    stdout: 'hello\n',
+  });
 
   try {
     assert.deepEqual(assertFixtureResult({ expectedPath, actualPath }), { exitCode: 0 });
   } finally {
-    fs.rmSync(fixtureDir, { recursive: true, force: true });
+    fs.rmSync(expectedPath, { recursive: true, force: true });
+    fs.rmSync(actualPath, { recursive: true, force: true });
   }
 });
 
-test('assertFixtureResult returns exitCode 1 when expected and actual files differ', () => {
-  const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'run-test-assert-fail-'));
-  const expectedPath = path.join(fixtureDir, 'expected.txt');
-  const actualPath = path.join(fixtureDir, 'actual.txt');
-
-  fs.writeFileSync(expectedPath, 'ok\n', 'utf8');
-  fs.writeFileSync(actualPath, 'nope\n', 'utf8');
+test('assertFixtureResult returns exitCode 1 when fixture stdout files differ', () => {
+  const expectedPath = createAssertionDirectory({
+    prefix: 'run-test-assert-fail-expected-',
+    stdout: 'ok\n',
+  });
+  const actualPath = createAssertionDirectory({
+    prefix: 'run-test-assert-fail-actual-',
+    stdout: 'nope\n',
+  });
 
   try {
     assert.deepEqual(assertFixtureResult({ expectedPath, actualPath }), { exitCode: 1 });
   } finally {
-    fs.rmSync(fixtureDir, { recursive: true, force: true });
+    fs.rmSync(expectedPath, { recursive: true, force: true });
+    fs.rmSync(actualPath, { recursive: true, force: true });
   }
 });
 
-test('assertFixtureResult returns exitCode 2 when a compared file does not exist', () => {
-  const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'run-test-assert-missing-'));
-  const expectedPath = path.join(fixtureDir, 'expected.txt');
-  const actualPath = path.join(fixtureDir, 'actual.txt');
-
-  fs.writeFileSync(expectedPath, 'ok\n', 'utf8');
+test('assertFixtureResult returns exitCode 2 when a compared fixture file does not exist', () => {
+  const expectedPath = createAssertionDirectory({
+    prefix: 'run-test-assert-missing-expected-',
+    stdout: 'ok\n',
+    stderr: 'err\n',
+  });
+  const actualPath = createAssertionDirectory({
+    prefix: 'run-test-assert-missing-actual-',
+    stdout: 'ok\n',
+  });
 
   try {
     assert.deepEqual(assertFixtureResult({ expectedPath, actualPath }), { exitCode: 2 });
   } finally {
-    fs.rmSync(fixtureDir, { recursive: true, force: true });
+    fs.rmSync(expectedPath, { recursive: true, force: true });
+    fs.rmSync(actualPath, { recursive: true, force: true });
   }
 });

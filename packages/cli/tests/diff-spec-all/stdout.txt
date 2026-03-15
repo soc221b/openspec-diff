@@ -1,4 +1,25 @@
+? Select a change to diff
+❯ digital-wallet
+
+↑↓ navigate • ⏎ select
+✔ Select a change to diff digital-wallet
+
 ? Select specs to diff
+❯ ◯ auth
+  ◯ transaction
+
+↑↓ navigate • space toggle • ⏎ submit
+[5A[J? Select specs to diff
+❯ ◉ auth
+  ◯ transaction
+
+↑↓ navigate • space toggle • ⏎ submit
+[5A[J? Select specs to diff
+  ◉ auth
+❯ ◯ transaction
+
+↑↓ navigate • space toggle • ⏎ submit
+[5A[J? Select specs to diff
   ◉ auth
 ❯ ◉ transaction
 
