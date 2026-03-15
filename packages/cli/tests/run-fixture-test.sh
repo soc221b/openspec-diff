@@ -146,7 +146,7 @@ def wait_for_output_to_settle(process, buffer):
         time.sleep(OUTPUT_POLL_INTERVAL_SECONDS)
 
 
-def wait_for_process_exit(process):
+def wait_for_process_exit_with_timeout(process):
     try:
         process.wait(timeout=PROCESS_EXIT_TIMEOUT_SECONDS)
         return True
@@ -213,7 +213,7 @@ if not abort_requested and process.poll() is None:
     if process.stdin is not None:
         process.stdin.close()
         process.stdin = None
-    if not wait_for_process_exit(process):
+    if not wait_for_process_exit_with_timeout(process):
         last_line_number = instructions[-1][0] if instructions else 1
         error_message = (
             f"{stdin_path}:{last_line_number}: process did not exit after scripted input; "
