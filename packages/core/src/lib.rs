@@ -163,29 +163,25 @@ fn preprocess_change_spec(
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
-        let details = if !stderr.is_empty() {
-            stderr
-        } else if !stdout.is_empty() {
-            stdout
-        } else {
-            format!("openspec archive exited with status {}", output.status)
-        };
+        let details = archive_output_details(
+            &stdout,
+            &stderr,
+            &format!("openspec archive exited with status {}", output.status),
+        );
         return Err(format!(
             "failed to preprocess delta spec {}: {details}",
             context.change_spec_path.display()
         ));
     }
 
-    if archive_aborted_without_writing(&output) {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
-        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
-        let details = if !stderr.is_empty() {
-            stderr
-        } else if !stdout.is_empty() {
-            stdout
-        } else {
-            String::from("openspec archive reported no changes")
-        };
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    if archive_aborted_without_writing(&stdout, &stderr) {
+        let details = archive_output_details(
+            &stdout,
+            &stderr,
+            "openspec archive aborted: no files were changed",
+        );
         return Err(format!(
             "failed to preprocess delta spec {}: {details}",
             context.change_spec_path.display()
@@ -205,12 +201,20 @@ fn preprocess_change_spec(
     Ok(synthesized_spec_path)
 }
 
-fn archive_aborted_without_writing(output: &std::process::Output) -> bool {
+fn archive_aborted_without_writing(stdout: &str, stderr: &str) -> bool {
     let aborted_marker = "Aborted. No files were changed.";
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
 
     stdout.contains(aborted_marker) || stderr.contains(aborted_marker)
+}
+
+fn archive_output_details(stdout: &str, stderr: &str, fallback: &str) -> String {
+    if !stderr.is_empty() {
+        stderr.to_owned()
+    } else if !stdout.is_empty() {
+        stdout.to_owned()
+    } else {
+        fallback.to_owned()
+    }
 }
 
 fn copy_file(source: &Path, target: &Path) -> Result<(), String> {
