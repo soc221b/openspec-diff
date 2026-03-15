@@ -226,9 +226,20 @@ export function assertFixtureResult({
   for (const fileName of ['stdout.txt', 'stderr.txt', 'exit-code.txt'] as const) {
     const expectedFilePath = path.join(expectedPath, fileName);
     const actualFilePath = path.join(actualPath, fileName);
+    const expectedExists = fs.existsSync(expectedFilePath);
+    const actualExists = fs.existsSync(actualFilePath);
 
-    if (!fs.existsSync(expectedFilePath) && !fs.existsSync(actualFilePath)) {
+    if (!expectedExists && !actualExists) {
       continue;
+    }
+
+    if (expectedExists !== actualExists) {
+      process.stderr.write(
+        `Fixture file presence mismatch for ${fileName}: expected ${expectedExists ? 'present' : 'missing'}, actual ${
+          actualExists ? 'present' : 'missing'
+        }\n`
+      );
+      return { exitCode: 2 };
     }
 
     const completed = spawnSync('diff', ['-u', expectedFilePath, actualFilePath], {
