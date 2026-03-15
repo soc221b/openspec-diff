@@ -229,7 +229,7 @@ test('main prints dots plus a trailing newline and exits 0 when fixtures pass', 
   }
 });
 
-test('main prints F plus a trailing newline and exits 1 when any fixture fails', async () => {
+test('main prints F plus a numbered failure list and exits 1 when any fixture fails', async () => {
   const { workspaceRoot, testsDir, fixtureDir } = createCliFixtureWorkspace({
     prefix: 'run-test-main-fail-',
     fixtureName: 'fail-fixture',
@@ -251,15 +251,46 @@ test('main prints F plus a trailing newline and exits 1 when any fixture fails',
     );
 
     assert.equal(completed.status, 1);
-    assert.equal(completed.stdout, 'F\n');
-    assert.match(
-      completed.stderr,
-      new RegExp(
-        `${fixtureDir.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\n${path
-          .join(fixtureDir, 'stdin.txt')
-          .replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}:2: process did not exit after scripted input`
-      )
+    assert.equal(completed.stdout, `F\n- x 1) ${fixtureDir}\n`);
+    assert.equal(completed.stderr, '');
+  } finally {
+    fs.rmSync(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
+test('main prints one numbered failure line for each failed fixture after the summary output', async () => {
+  const { workspaceRoot, testsDir, fixtureDir: firstFixtureDir } = createCliFixtureWorkspace({
+    prefix: 'run-test-main-multi-fail-',
+    fixtureName: 'fail-fixture-1',
+    runnerLines: [
+      '#!/usr/bin/env node',
+      'setInterval(() => {}, 1000);',
+      'process.stdin.resume();',
+      'process.stdin.setEncoding("utf8");',
+      'process.stdin.on("data", () => {});',
+    ],
+    stdin: 'openspec-diff\nhello\\n\n',
+    stdout: '',
+  });
+  const secondFixtureDir = path.join(testsDir, 'fail-fixture-2');
+
+  fs.mkdirSync(path.join(secondFixtureDir, 'openspec'), { recursive: true });
+  fs.writeFileSync(path.join(secondFixtureDir, 'stdin.txt'), 'openspec-diff\nhello\\n\n', 'utf8');
+  fs.writeFileSync(path.join(secondFixtureDir, 'stdout.txt'), '', 'utf8');
+
+  try {
+    const completed = spawnSync(
+      'node',
+      [RUN_TEST_PATH, testsDir],
+      { encoding: 'utf8', env: { ...process.env, NODE_NO_WARNINGS: '1' } }
     );
+
+    assert.equal(completed.status, 1);
+    assert.equal(
+      completed.stdout,
+      `FF\n- x 1) ${firstFixtureDir}\n- x 2) ${secondFixtureDir}\n`
+    );
+    assert.equal(completed.stderr, '');
   } finally {
     fs.rmSync(workspaceRoot, { recursive: true, force: true });
   }

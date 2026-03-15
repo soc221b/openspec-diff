@@ -102,7 +102,7 @@ async function main(argv = process.argv) {
   process.stdout.write('\n');
 
   if (fixtureFailures.length > 0) {
-    process.stderr.write(`${formatFailures(fixtureFailures)}\n`);
+    process.stdout.write(`${formatFailureList(fixtureFailures)}\n`);
     process.exitCode = 1;
     return;
   }
@@ -963,8 +963,8 @@ function getSignalNumber(signalCode: NodeJS.Signals) {
   return signalNumber;
 }
 
-function formatFailures(failures: FixtureFailure[]) {
-  return failures.map((failure) => `${failure.fixtureDir}\n${failure.message}`).join('\n\n');
+function formatFailureList(failures: FixtureFailure[]) {
+  return failures.map((failure, index) => `- x ${index + 1}) ${failure.fixtureDir}`).join('\n');
 }
 
 function formatCompletedCommand(command: string, args: string[], completed: ReturnType<typeof spawnSync>) {
