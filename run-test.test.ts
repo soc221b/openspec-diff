@@ -128,3 +128,17 @@ test('assertFixtureResult returns exitCode 1 when expected and actual files diff
     fs.rmSync(fixtureDir, { recursive: true, force: true });
   }
 });
+
+test('assertFixtureResult returns exitCode 2 when a compared file does not exist', () => {
+  const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'run-test-assert-missing-'));
+  const expectedPath = path.join(fixtureDir, 'expected.txt');
+  const actualPath = path.join(fixtureDir, 'actual.txt');
+
+  fs.writeFileSync(expectedPath, 'ok\n', 'utf8');
+
+  try {
+    assert.deepEqual(assertFixtureResult({ expectedPath, actualPath }), { exitCode: 2 });
+  } finally {
+    fs.rmSync(fixtureDir, { recursive: true, force: true });
+  }
+});

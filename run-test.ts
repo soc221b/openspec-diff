@@ -151,7 +151,9 @@ export function assertFixtureResult({
   });
 
   if (completed.status === null) {
-    throw new Error(formatCompletedCommand('diff', ['-u', expectedPath, actualPath], completed));
+    throw new Error(
+      `diff command did not exit normally: ${formatCompletedCommand('diff', ['-u', expectedPath, actualPath], completed)}`
+    );
   }
 
   return { exitCode: completed.status };
