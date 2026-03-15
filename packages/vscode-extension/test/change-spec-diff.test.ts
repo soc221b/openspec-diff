@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -40,7 +40,9 @@ test("looksLikeDeltaSpec detects OpenSpec delta markers", () => {
 });
 
 test("writeArchiveWorkspaceFiles creates the temporary archive workspace", async () => {
-  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "openspec-diff-core-ts-"));
+  const tempRoot = await mkdtemp(
+    path.join(os.tmpdir(), "openspec-diff-core-ts-"),
+  );
   const context = {
     repoRoot: "/repo",
     changeName: "single-sign-on",
@@ -48,49 +50,52 @@ test("writeArchiveWorkspaceFiles creates the temporary archive workspace", async
     changeSpecPath: "/repo/openspec/changes/single-sign-on/specs/auth/spec.md",
     mainSpecPath: "/repo/openspec/specs/auth/spec.md",
   };
+  try {
+    await writeArchiveWorkspaceFiles({
+      tempRoot,
+      context,
+      changeSpecContent: "# Change spec\n",
+      mainContent: "# Main spec\n",
+    });
 
-  await writeArchiveWorkspaceFiles({
-    tempRoot,
-    context,
-    changeSpecContent: "# Change spec\n",
-    mainContent: "# Main spec\n",
-  });
-
-  assert.equal(
-    await readFile(
-      path.join(
-        tempRoot,
-        "openspec",
-        "changes",
-        "single-sign-on",
-        "specs",
-        "auth",
-        "spec.md",
+    assert.equal(
+      await readFile(
+        path.join(
+          tempRoot,
+          "openspec",
+          "changes",
+          "single-sign-on",
+          "specs",
+          "auth",
+          "spec.md",
+        ),
+        "utf8",
       ),
-      "utf8",
-    ),
-    "# Change spec\n",
-  );
-  assert.equal(
-    await readFile(
-      path.join(tempRoot, "openspec", "specs", "auth", "spec.md"),
-      "utf8",
-    ),
-    "# Main spec\n",
-  );
-  assert.equal(
-    await readFile(
-      path.join(
-        tempRoot,
-        "openspec",
-        "changes",
-        "single-sign-on",
-        "proposal.md",
+      "# Change spec\n",
+    );
+    assert.equal(
+      await readFile(
+        path.join(tempRoot, "openspec", "specs", "auth", "spec.md"),
+        "utf8",
       ),
-      "utf8",
-    ),
-    "# Temporary diff change\n",
-  );
+      "# Main spec\n",
+    );
+    assert.equal(
+      await readFile(
+        path.join(
+          tempRoot,
+          "openspec",
+          "changes",
+          "single-sign-on",
+          "proposal.md",
+        ),
+        "utf8",
+      ),
+      "# Temporary diff change\n",
+    );
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
 });
 
 test("createDiffDocumentUri encodes the source document and side", () => {

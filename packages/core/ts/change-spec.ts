@@ -75,10 +75,6 @@ export function getChangeSpecContext(
   }
 }
 
-export function isChangeSpecPath(specPath: string): boolean {
-  return getChangeSpecContext(specPath) !== undefined;
-}
-
 export function looksLikeDeltaSpec(content: string): boolean {
   const lines = content.split(/\r?\n/);
   return DELTA_MARKERS.some((marker) =>
@@ -133,5 +129,9 @@ export async function writeArchiveWorkspaceFiles({
     TEMP_PROPOSAL_CONTENT,
     "utf8",
   );
-  await writeFile(path.join(tempChangeRoot, "tasks.md"), TEMP_TASKS_CONTENT, "utf8");
+  await writeFile(
+    path.join(tempChangeRoot, "tasks.md"),
+    TEMP_TASKS_CONTENT,
+    "utf8",
+  );
 }
