@@ -14,7 +14,7 @@ const SIGNAL_EXIT_CODE_OFFSET = 128;
 const TESTS_DIRECTORY_NAME = 'tests';
 type FixtureFailure = { fixtureDir: string; message: string };
 type FixtureInstruction = { lineNumber: number; value: string };
-type CommandRunnerInput = { commands: string[]; workingDirectory: string };
+type CommandRunnerInput = { stdin: string; path: string };
 type CommandResult = { stdout: string; stderr: string; exitCode: number };
 type FixtureAssertionInput = { expectedPath: string; actualPath: string };
 type FixtureAssertionResult = { exitCode: number };
@@ -62,14 +62,55 @@ const PACKAGE_CONTEXTS: Record<string, PackageContext> = {
 
 export async function main(argv = process.argv) {
   const testsPath = getTestsPath(argv);
-  const workspaceRoot = getWorkspaceRoot(import.meta.url);
-  const fixtureFailures = await runFixtureSuite({ workspaceRoot, testsPath });
+  ensurePathExists(testsPath);
+  const fixtureFailures: FixtureFailure[] = [];
+
+  for (const fixtureDir of getFixtureDirectories(testsPath)) {
+    const actualDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openspec-diff-actual-'));
+
+    try {
+      const result = await runFixtureCommand({
+        stdin: fs.readFileSync(path.join(fixtureDir, 'stdin.txt'), 'utf8'),
+        path: fixtureDir,
+      });
+      const stdoutPath = path.join(actualDir, 'stdout.txt');
+      const stderrPath = path.join(actualDir, 'stderr.txt');
+
+      fs.writeFileSync(stdoutPath, result.stdout, 'utf8');
+      fs.writeFileSync(stderrPath, result.stderr, 'utf8');
+
+      assertExitCode(fixtureDir, result.exitCode);
+      assertDiffMatches(path.join(fixtureDir, 'stdout.txt'), stdoutPath);
+
+      const expectedStderrPath = path.join(fixtureDir, 'stderr.txt');
+
+      if (fs.existsSync(expectedStderrPath)) {
+        assertDiffMatches(expectedStderrPath, stderrPath);
+      } else if (result.stderr.length > 0) {
+        throw new Error(`Unexpected stderr output for ${fixtureDir}\n${result.stderr}`);
+      }
+
+      process.stdout.write('.');
+    } catch (error) {
+      process.stdout.write('x');
+      fixtureFailures.push({
+        fixtureDir,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      fs.rmSync(actualDir, { recursive: true, force: true });
+    }
+  }
 
   process.stdout.write('\n');
 
   if (fixtureFailures.length > 0) {
-    throw new Error(formatFailures(fixtureFailures));
+    process.stderr.write(`${formatFailures(fixtureFailures)}\n`);
+    process.exitCode = 1;
+    return;
   }
+
+  process.exitCode = 0;
 }
 
 export async function runFixtureSuite({
@@ -97,45 +138,84 @@ export async function runFixtureSuite({
 }
 
 async function executeFixture(context: FixtureContext, fixtureDir: string): Promise<FixtureFailure | null> {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openspec-diff-test-'));
-
   try {
-    const execution = createFixtureExecution(context, fixtureDir, tempDir);
-    const result = await runPlannedFixtureCommand(execution.commandPlan, execution.outputPaths.workspaceDir);
-    validateFixtureResult({ fixtureDir, outputPaths: execution.outputPaths, result });
+    const result = await runFixtureCommandInWorkspace({
+      stdin: fs.readFileSync(path.join(fixtureDir, 'stdin.txt'), 'utf8'),
+      fixtureDir,
+      workspaceRoot: context.workspaceRoot,
+    });
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openspec-diff-actual-'));
+
+    try {
+      validateFixtureResult({
+        fixtureDir,
+        outputPaths: {
+          workspaceDir: fixtureDir,
+          stdoutPath: path.join(tempDir, 'stdout.txt'),
+          stderrPath: path.join(tempDir, 'stderr.txt'),
+        },
+        result,
+      });
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+
     return null;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return { fixtureDir, message };
+  }
+}
+
+export async function runFixtureCommand({
+  stdin,
+  path: fixtureDir,
+}: CommandRunnerInput): Promise<CommandResult> {
+  return runFixtureCommandInWorkspace({
+    stdin,
+    fixtureDir,
+    workspaceRoot: getWorkspaceRoot(import.meta.url),
+  });
+}
+
+async function runFixtureCommandInWorkspace({
+  stdin,
+  fixtureDir,
+  workspaceRoot,
+}: {
+  stdin: string;
+  fixtureDir: string;
+  workspaceRoot: string;
+}): Promise<CommandResult> {
+  const context = createContext(workspaceRoot, fixtureDir);
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openspec-diff-test-'));
+
+  try {
+    ensureFixtureInputs(fixtureDir);
+
+    const outputPaths = prepareFixtureWorkspace(context, fixtureDir, tempDir);
+    const commandPlan = parseFixturePlan(
+      fixtureDir,
+      stdin,
+      outputPaths.commandPath,
+      context.commandName,
+      context.interactive
+    );
+    const result = await runPlannedFixtureCommand(commandPlan, outputPaths.workspaceDir);
+
+    return {
+      stdout: normalizeOutput(result.stdout),
+      stderr: normalizeFixturePaths(result.stderr, outputPaths.workspaceDir, fixtureDir),
+      exitCode: result.exitCode,
+    };
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 }
 
-function createFixtureExecution(context: FixtureContext, fixtureDir: string, tempDir: string) {
-  ensureFixtureInputs(fixtureDir);
-
-  const outputPaths = prepareFixtureWorkspace(context, fixtureDir, tempDir);
-  const commandPlan = parseFixturePlan(
-    fixtureDir,
-    outputPaths.commandPath,
-    context.commandName,
-    context.interactive
-  );
-
-  return { fixtureDir, commandPlan, outputPaths };
-}
-
-export async function runFixtureCommand({
-  commands,
-  workingDirectory,
-}: CommandRunnerInput): Promise<CommandResult> {
-  return createCommandResult(runCommand(commands, workingDirectory));
-}
-
 function runPlannedFixtureCommand(commandPlan: CommandPlan, workingDirectory: string): Promise<CommandResult> {
   if (!commandPlan.interactive) {
-    return runFixtureCommand({ commands: commandPlan.command, workingDirectory });
+    return Promise.resolve(createCommandResult(runCommand(commandPlan.command, workingDirectory)));
   }
 
   return runInteractiveFixtureCommand(commandPlan, workingDirectory);
@@ -308,6 +388,7 @@ function spawnInteractiveProcess(commandPlan: CommandPlan, workspaceDir: string)
 
 function parseFixturePlan(
   fixtureDir: string,
+  stdin: string,
   commandPath: string,
   commandName: string,
   interactive: boolean
@@ -316,7 +397,7 @@ function parseFixturePlan(
   const instructions: FixtureInstruction[] = [];
   let command: string[] | null = null;
 
-  for (const entry of getInstructionLines(stdinPath)) {
+  for (const entry of getInstructionLines(stdin, stdinPath)) {
     if (command === null) {
       const invocation = parseInvocation(entry.value, stdinPath, entry.lineNumber);
 
@@ -418,8 +499,8 @@ function getCommandPath(context: FixtureContext) {
   return context.resolveCommandPath(context);
 }
 
-function getInstructionLines(stdinPath: string): FixtureInstruction[] {
-  const lines = fs.readFileSync(stdinPath, 'utf8').split(/\r?\n/);
+function getInstructionLines(stdin: string, stdinPath: string): FixtureInstruction[] {
+  const lines = stdin.split(/\r?\n/);
   const instructions: FixtureInstruction[] = [];
 
   for (const [index, rawLine] of lines.entries()) {
