@@ -8,5 +8,5 @@
     "target": "ES2022",
     "types": ["node", "vscode"]
   },
-  "include": ["src/**/*.ts", "test/**/*.ts"]
+  "include": ["src/**/*.ts", "test/**/*.ts", "../core/ts/**/*.ts"]
 }

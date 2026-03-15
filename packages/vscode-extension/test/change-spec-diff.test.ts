@@ -6,10 +6,13 @@ import test from "node:test";
 
 import {
   createDiffDocumentUri,
-  getChangeSpecContext,
   loadDiffSnapshot,
-  looksLikeDeltaSpec,
 } from "../src/change-spec-diff.ts";
+import {
+  getChangeSpecContext,
+  looksLikeDeltaSpec,
+  writeArchiveWorkspaceFiles,
+} from "../../core/ts/change-spec.ts";
 
 test("getChangeSpecContext resolves change and main spec paths", () => {
   const specPath = path.join(
@@ -34,6 +37,60 @@ test("getChangeSpecContext resolves change and main spec paths", () => {
 test("looksLikeDeltaSpec detects OpenSpec delta markers", () => {
   assert.equal(looksLikeDeltaSpec("## MODIFIED Requirements\n"), true);
   assert.equal(looksLikeDeltaSpec("# Plain spec\n"), false);
+});
+
+test("writeArchiveWorkspaceFiles creates the temporary archive workspace", async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "openspec-diff-core-ts-"));
+  const context = {
+    repoRoot: "/repo",
+    changeName: "single-sign-on",
+    relativeSpecPath: path.join("auth", "spec.md"),
+    changeSpecPath: "/repo/openspec/changes/single-sign-on/specs/auth/spec.md",
+    mainSpecPath: "/repo/openspec/specs/auth/spec.md",
+  };
+
+  await writeArchiveWorkspaceFiles({
+    tempRoot,
+    context,
+    changeSpecContent: "# Change spec\n",
+    mainContent: "# Main spec\n",
+  });
+
+  assert.equal(
+    await readFile(
+      path.join(
+        tempRoot,
+        "openspec",
+        "changes",
+        "single-sign-on",
+        "specs",
+        "auth",
+        "spec.md",
+      ),
+      "utf8",
+    ),
+    "# Change spec\n",
+  );
+  assert.equal(
+    await readFile(
+      path.join(tempRoot, "openspec", "specs", "auth", "spec.md"),
+      "utf8",
+    ),
+    "# Main spec\n",
+  );
+  assert.equal(
+    await readFile(
+      path.join(
+        tempRoot,
+        "openspec",
+        "changes",
+        "single-sign-on",
+        "proposal.md",
+      ),
+      "utf8",
+    ),
+    "# Temporary diff change\n",
+  );
 });
 
 test("createDiffDocumentUri encodes the source document and side", () => {
