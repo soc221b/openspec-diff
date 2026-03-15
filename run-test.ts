@@ -99,8 +99,6 @@ async function main(argv = process.argv) {
     }
   }
 
-  process.stdout.write('\n');
-
   if (fixtureFailures.length > 0) {
     process.stderr.write(`${formatFailures(fixtureFailures)}\n`);
     process.exitCode = 1;

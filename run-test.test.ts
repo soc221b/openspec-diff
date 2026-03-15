@@ -222,7 +222,7 @@ test('main prints dots and exits 0 when fixtures pass', async () => {
     );
 
     assert.equal(completed.status, 0);
-    assert.equal(completed.stdout, '.\n');
+    assert.equal(completed.stdout, '.');
     assert.equal(completed.stderr, '');
   } finally {
     fs.rmSync(workspaceRoot, { recursive: true, force: true });
@@ -251,7 +251,7 @@ test('main prints x and exits 1 when any fixture fails', async () => {
     );
 
     assert.equal(completed.status, 1);
-    assert.equal(completed.stdout, 'x\n');
+    assert.equal(completed.stdout, 'x');
     assert.match(
       completed.stderr,
       new RegExp(
