@@ -208,7 +208,6 @@ function assertProcessDidExit(commandPlan: CommandPlan, result: DetailedCommandR
       `${commandPlan.stdinPath}:${lineNumber}: process did not exit after scripted input; add ^C or explicit submit input such as \\n`
     );
   }
-
 }
 
 function createCommandResult(result: DetailedCommandResult): CommandResult {
