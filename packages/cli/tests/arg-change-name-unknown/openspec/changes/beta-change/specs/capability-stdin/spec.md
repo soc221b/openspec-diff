@@ -1,10 +1,10 @@
-# Capability STDIN - Changes
+# Spec - Changes
 
 ## MODIFIED Requirements
 
-### Requirement: The system SHALL support changed stdin capability
+### Requirement: _
+The system SHALL _.
 
-#### Scenario: Changed
-Given capability stdin
-When requested
-Then changed stdin capability
+#### Scenario: _
+- **WHEN** _
+- **THEN** _

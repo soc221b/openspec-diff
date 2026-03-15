@@ -1,13 +1,13 @@
-# capability-b Specification
+# Spec
 
 ## Purpose
-capability b.
+_
 
 ## Requirements
 
-### Requirement: The system SHALL support main capability b
+### Requirement: _
+The system SHALL _.
 
-#### Scenario: Main
-Given capability b
-When requested
-Then main capability b
+#### Scenario: _
+- **WHEN** _
+- **THEN** _

@@ -1,10 +1,10 @@
-# Capability A - Changes
+# Spec - Changes
 
 ## MODIFIED Requirements
 
-### Requirement: The system SHALL support changed capability a
+### Requirement: _
+The system SHALL _.
 
-#### Scenario: Changed
-Given capability a
-When requested
-Then changed capability a
+#### Scenario: _
+- **WHEN** _
+- **THEN** _

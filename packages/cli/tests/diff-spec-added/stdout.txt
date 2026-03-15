@@ -6,13 +6,13 @@
 
 Diffing capability-new/spec.md
 0a1,10
-> # Capability New - Changes
+> # Spec - Changes
 > 
 > ## ADDED Requirements
 > 
-> ### Requirement: The system SHALL support capability new spec
+> ### Requirement: _
+> The system SHALL _.
 > 
-> #### Scenario: Added
-> Given capability new
-> When requested
-> Then capability new spec
+> #### Scenario: _
+> - **WHEN** _
+> - **THEN** _

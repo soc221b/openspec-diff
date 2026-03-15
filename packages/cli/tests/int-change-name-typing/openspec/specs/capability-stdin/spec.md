@@ -1,13 +1,13 @@
-# capability-stdin Specification
+# Spec
 
 ## Purpose
-capability stdin.
+_
 
 ## Requirements
 
-### Requirement: The system SHALL support main stdin capability
+### Requirement: _
+The system SHALL _.
 
-#### Scenario: Main
-Given capability stdin
-When requested
-Then main stdin capability
+#### Scenario: _
+- **WHEN** _
+- **THEN** _

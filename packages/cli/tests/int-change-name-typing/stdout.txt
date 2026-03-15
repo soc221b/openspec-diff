@@ -7,25 +7,13 @@
 
 Diffing capability-stdin/spec.md
 1c1
-< # capability-stdin Specification
+< # Spec
 ---
-> # Capability STDIN - Changes
-3,4c3
+> # Spec - Changes
+3,6c3
 < ## Purpose
-< capability stdin.
----
-> ## MODIFIED Requirements
-6c5
+< _
+< 
 < ## Requirements
 ---
-> ### Requirement: The system SHALL support changed stdin capability
-8,10c7
-< ### Requirement: The system SHALL support main stdin capability
-< 
-< #### Scenario: Main
----
-> #### Scenario: Changed
-13c10
-< Then main stdin capability
----
-> Then changed stdin capability
+> ## MODIFIED Requirements
