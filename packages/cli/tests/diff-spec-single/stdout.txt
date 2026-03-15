@@ -1,20 +1,20 @@
 ? Select a change to diff
-❯ single-spec
+❯ single-sign-on
 
 ↑↓ navigate • ⏎ select
-✔ Select a change to diff single-spec
+✔ Select a change to diff single-sign-on
 
-Diffing capability-a/spec.md
+Diffing auth/spec.md
 5d4
 < 
 7d5
 < 
 9c7
-< The system SHALL support capability-a.
+< The system SHALL let a customer sign in with a verified account and reach protected features without unnecessary friction.
 ---
-> The system SHALL support updated capability-a behavior.
+> The system SHALL let a customer sign in with stronger session checks while keeping protected features easy to reach.
 13c11,12
-< - **THEN** capability-a is available
+< - **THEN** the account area is shown
 ---
-> - **THEN** updated capability-a behavior is available
+> - **THEN** the account area is shown after stronger session checks
 > 

@@ -1,1 +1,1 @@
-openspec-diff two-specs capability-b
+openspec-diff digital-wallet transaction

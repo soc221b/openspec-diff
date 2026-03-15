@@ -1,21 +1,21 @@
 ? Select a change to diff
-❯ alpha-change
-  beta-change
+❯ digital-wallet
+  real-time-tracking
 
 ↑↓ navigate • ⏎ select
-✔ Select a change to diff beta-change
+✔ Select a change to diff real-time-tracking
 
-Diffing capability-stdin/spec.md
+Diffing auth/spec.md
 5d4
 < 
 7d5
 < 
 9c7
-< The system SHALL support capability-stdin.
+< The system SHALL let a customer sign in with a verified account and reach protected features without unnecessary friction.
 ---
-> The system SHALL support updated capability-stdin behavior.
+> The system SHALL let a customer sign in with stronger session checks while keeping protected features easy to reach.
 13c11,12
-< - **THEN** capability-stdin is available
+< - **THEN** the account area is shown
 ---
-> - **THEN** updated capability-stdin behavior is available
+> - **THEN** the account area is shown after stronger session checks
 > 

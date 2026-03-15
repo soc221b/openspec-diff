@@ -3,11 +3,11 @@
 7d5
 < 
 9c7
-< The system SHALL support capability-a.
+< The system SHALL let a customer sign in with a verified account and reach protected features without unnecessary friction.
 ---
-> The system SHALL support archived capability-a behavior.
+> The system SHALL let a customer sign in with stronger session checks while keeping protected features easy to reach.
 13c11,12
-< - **THEN** capability-a is available
+< - **THEN** the account area is shown
 ---
-> - **THEN** archived capability-a behavior is available
+> - **THEN** the account area is shown after stronger session checks
 > 

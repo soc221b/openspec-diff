@@ -1,2 +1,2 @@
-openspec-diff two-specs
+openspec-diff digital-wallet
 \n # submit with no specs selected

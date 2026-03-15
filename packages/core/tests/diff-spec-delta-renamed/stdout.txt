@@ -2,8 +2,8 @@
 < 
 7,8c6
 < 
-< ### Requirement: The system SHALL support original capability-a behavior
+< ### Requirement: The system SHALL protect account access during sign-in
 ---
-> ### Requirement: The system SHALL support renamed capability-a behavior
+> ### Requirement: The system SHALL protect account access during sign-in and reauthentication
 13a12
 > 

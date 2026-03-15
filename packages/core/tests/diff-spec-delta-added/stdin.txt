@@ -1,1 +1,1 @@
-openspec-difftool ./openspec/specs/capability-a/spec.md ./openspec/changes/change-a/specs/capability-a/spec.md
+openspec-difftool ./openspec/specs/auth/spec.md ./openspec/changes/digital-wallet/specs/auth/spec.md

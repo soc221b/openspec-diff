@@ -24,7 +24,7 @@
       "outputs": ["{workspaceRoot}/dist/target/core"],
       "options": {
         "cwd": "packages/core",
-        "command": "if ! command -v openspec >/dev/null 2>&1; then npm install -g @fission-ai/openspec@1.2.0; fi && cargo build --target-dir ../../dist/target/core && set -e && for fixture_dir in ./tests/*; do [ -d \"$fixture_dir\" ] || continue; ./tests/run-fixture-test.sh \"$fixture_dir\"; done"
+        "command": "if ! command -v openspec >/dev/null 2>&1; then npm install -g @fission-ai/openspec@stable || npm install -g @fission-ai/openspec@latest; fi && cargo build --target-dir ../../dist/target/core && set -e && for fixture_dir in ./tests/*; do [ -d \"$fixture_dir\" ] || continue; ./tests/run-fixture-test.sh \"$fixture_dir\"; done"
       }
     }
   }

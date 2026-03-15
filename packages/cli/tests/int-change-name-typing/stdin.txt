@@ -1,2 +1,2 @@
 openspec-diff
-beta-change\n # \n submits the named change
+real-time-tracking\n # \n submits the named change

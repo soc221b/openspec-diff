@@ -4,10 +4,10 @@
 < 
 13a12,19
 > 
-> ### Requirement: The system SHALL support added capability-a behavior
-> The system SHALL support added capability-a behavior.
+> ### Requirement: The system SHALL offer passwordless sign-in links for returning customers who choose a faster sign-in path
+> The system SHALL offer passwordless sign-in links for returning customers who choose a faster sign-in path.
 > 
-> #### Scenario: Added capability A behavior is requested
-> - **WHEN** added capability-a behavior is requested
-> - **THEN** added capability-a behavior is available
+> #### Scenario: A returning customer requests a passwordless link
+> - **WHEN** a returning customer asks for a passwordless sign-in link
+> - **THEN** a secure sign-in link is issued
 > 

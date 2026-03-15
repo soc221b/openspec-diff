@@ -1,20 +1,20 @@
 ? Select a change to diff
-❯ new-spec
+❯ digital-wallet
 
 ↑↓ navigate • ⏎ select
-✔ Select a change to diff new-spec
+✔ Select a change to diff digital-wallet
 
-Diffing capability-new/spec.md
+Diffing shipping/spec.md
 5d4
 < 
 7d5
 < 
 13a12,19
 > 
-> ### Requirement: The system SHALL support added capability-new behavior
-> The system SHALL support added capability-new behavior.
+> ### Requirement: The system SHALL show real-time tracking updates after a package is handed to the carrier
+> The system SHALL show real-time tracking updates after a package is handed to the carrier.
 > 
-> #### Scenario: Added capability New behavior is requested
-> - **WHEN** added capability-new behavior is requested
-> - **THEN** added capability-new behavior is available
+> #### Scenario: A customer views a carrier-tracked shipment
+> - **WHEN** a carrier-tracked shipment is opened from order details
+> - **THEN** real-time tracking updates are shown
 > 

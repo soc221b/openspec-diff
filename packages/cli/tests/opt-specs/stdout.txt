@@ -1,28 +1,25 @@
-Diffing capability-a/spec.md
+Diffing auth/spec.md
 5d4
 < 
 7d5
 < 
 9c7
-< The system SHALL support capability-a.
+< The system SHALL let a customer sign in with a verified account and reach protected features without unnecessary friction.
 ---
-> The system SHALL support updated capability-a behavior.
+> The system SHALL let a customer sign in with stronger session checks while keeping protected features easy to reach.
 13c11,12
-< - **THEN** capability-a is available
+< - **THEN** the account area is shown
 ---
-> - **THEN** updated capability-a behavior is available
+> - **THEN** the account area is shown after stronger session checks
 > 
-Diffing capability-b/spec.md
+Diffing transaction/spec.md
 5d4
 < 
 7d5
 < 
 9c7
-< The system SHALL support capability-b.
+< The system SHALL record each completed purchase with consistent totals, payment status, and a readable history entry.
 ---
-> The system SHALL support updated capability-b behavior.
-13c11,12
-< - **THEN** capability-b is available
----
-> - **THEN** updated capability-b behavior is available
+> The system SHALL record each completed purchase with clearer payment status details and a more dependable history entry.
+13a12
 > 

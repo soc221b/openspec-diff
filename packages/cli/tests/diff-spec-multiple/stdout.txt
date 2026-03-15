@@ -1,36 +1,36 @@
 ? Select specs to diff
-  ◉ capability-a
-❯ ◉ capability-b
-  ◯ capability-c
+  ◉ auth
+❯ ◉ shipping
+  ◯ transaction
 
 ↑↓ navigate • space toggle • ⏎ submit
-✔ Select specs to diff capability-a, capability-b
+✔ Select specs to diff auth, shipping
 
-Diffing capability-a/spec.md
+Diffing auth/spec.md
 5d4
 < 
 7d5
 < 
 9c7
-< The system SHALL support capability-a.
+< The system SHALL let a customer sign in with a verified account and reach protected features without unnecessary friction.
 ---
-> The system SHALL support updated capability-a behavior.
+> The system SHALL let a customer sign in with stronger session checks while keeping protected features easy to reach.
 13c11,12
-< - **THEN** capability-a is available
+< - **THEN** the account area is shown
 ---
-> - **THEN** updated capability-a behavior is available
+> - **THEN** the account area is shown after stronger session checks
 > 
-Diffing capability-b/spec.md
+Diffing shipping/spec.md
 5d4
 < 
 7d5
 < 
 9c7
-< The system SHALL support capability-b.
+< The system SHALL present clear shipment progress so a customer can understand where an order is in transit.
 ---
-> The system SHALL support updated capability-b behavior.
+> The system SHALL present shipment progress with more timely tracking details so a customer can follow delivery changes clearly.
 13c11,12
-< - **THEN** capability-b is available
+< - **THEN** the current shipment progress is shown clearly
 ---
-> - **THEN** updated capability-b behavior is available
+> - **THEN** the current shipment progress is shown with fresher detail
 > 

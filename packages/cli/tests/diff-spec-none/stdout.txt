@@ -1,5 +1,5 @@
 ? Select specs to diff
-❯ ◯ capability-a
-  ◯ capability-b
+❯ ◯ auth
+  ◯ transaction
 
 ↑↓ navigate • space toggle • ⏎ submit
