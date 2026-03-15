@@ -10,13 +10,14 @@ const OUTPUT_IDLE_TIMEOUT_MS = 200;
 const OUTPUT_POLL_INTERVAL_MS = 10;
 const MAX_OUTPUT_SETTLE_MS = 1000;
 const PROCESS_EXIT_TIMEOUT_MS = 5000;
+const SIGNAL_EXIT_CODE_OFFSET = 128;
 main().catch(handleFatalError);
 
 async function main() {
   const testsPath = getTestsPath(process.argv);
   const workspaceRoot = __dirname;
   const context = createContext(workspaceRoot, testsPath);
-  const failures = [];
+  const fixtureFailures = /** @type {Array<{ fixtureDir: string; message: string }>} */ ([]);
 
   ensurePathExists(testsPath);
 
@@ -25,14 +26,14 @@ async function main() {
     process.stdout.write(failure ? 'x' : '.');
 
     if (failure) {
-      failures.push(failure);
+      fixtureFailures.push(failure);
     }
   }
 
   process.stdout.write('\n');
 
-  if (failures.length > 0) {
-    throw new Error(formatFailures(failures));
+  if (fixtureFailures.length > 0) {
+    throw new Error(formatFailures(fixtureFailures));
   }
 }
 
@@ -575,13 +576,12 @@ function runDiff(expectedPath, actualPath) {
 function readExpectedExitCode(fixtureDir) {
   const exitCodePath = path.join(fixtureDir, 'exit-code.txt');
   const value = fs.readFileSync(exitCodePath, 'utf8').trim();
-  const exitCode = Number.parseInt(value, 10);
 
-  if (!Number.isInteger(exitCode) || String(exitCode) !== value) {
-    throw new Error(`${exitCodePath}: expected a single integer exit code`);
+  if (!/^(0|[1-9]\d*)$/.test(value)) {
+    throw new Error(`${exitCodePath}: expected a single non-negative integer exit code`);
   }
 
-  return exitCode;
+  return Number.parseInt(value, 10);
 }
 
 function getActualExitCode(result) {
@@ -590,34 +590,17 @@ function getActualExitCode(result) {
   }
 
   if (result.signalCode) {
-    return 128 + getSignalNumber(result.signalCode);
+    return SIGNAL_EXIT_CODE_OFFSET + getSignalNumber(result.signalCode);
   }
 
   throw new Error('Command exited without an exit code or signal');
 }
 
 function getSignalNumber(signalCode) {
-  const signalNumbers = {
-    SIGHUP: 1,
-    SIGINT: 2,
-    SIGQUIT: 3,
-    SIGILL: 4,
-    SIGTRAP: 5,
-    SIGABRT: 6,
-    SIGBUS: 7,
-    SIGFPE: 8,
-    SIGKILL: 9,
-    SIGUSR1: 10,
-    SIGSEGV: 11,
-    SIGUSR2: 12,
-    SIGPIPE: 13,
-    SIGALRM: 14,
-    SIGTERM: 15,
-  };
-  const signalNumber = signalNumbers[signalCode];
+  const signalNumber = os.constants.signals[signalCode];
 
-  if (!signalNumber) {
-    throw new Error(`Unsupported signal code: ${signalCode}`);
+  if (signalNumber === undefined) {
+    throw new Error(`Signal code not found in os.constants.signals: ${signalCode}`);
   }
 
   return signalNumber;
