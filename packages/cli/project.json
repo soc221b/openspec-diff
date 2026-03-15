@@ -30,7 +30,7 @@
           "cargo build --manifest-path ../core/Cargo.toml --target-dir ../../dist/target/core",
           "cp ../../dist/target/core/debug/openspec-difftool ./bin/openspec-difftool",
           "go build -o ./bin/openspec-diff ./cmd/openspec-diff",
-          "set -e && for fixture_dir in ./tests/*; do [ -d \"$fixture_dir\" ] || continue; ./tests/run-fixture-test.sh \"$fixture_dir\"; done"
+          "node ../../run-test.ts ./tests"
         ]
       }
     }

@@ -28,7 +28,7 @@
         "commands": [
           "npm install -g @fission-ai/openspec@latest",
           "cargo build --target-dir ../../dist/target/core",
-          "set -e && for fixture_dir in ./tests/*; do [ -d \"$fixture_dir\" ] || continue; ./tests/run-fixture-test.sh \"$fixture_dir\"; done"
+          "node ../../run-test.ts ./tests"
         ]
       }
     }
