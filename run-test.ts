@@ -53,7 +53,7 @@ async function runFixture(context, fixtureDir) {
       ? await runInteractiveCommand(commandPlan, outputPaths)
       : runNonInteractiveCommand(commandPlan, outputPaths);
 
-    writeCommandOutputs(outputPaths, result);
+    writeCommandOutputs(fixtureDir, outputPaths, result);
     validateCommandResult(result, commandPlan);
     assertFixtureOutputs(fixtureDir, outputPaths);
     return null;
@@ -256,9 +256,13 @@ function parseFixturePlan(fixtureDir, commandPath, commandName, interactive) {
   };
 }
 
-function writeCommandOutputs(outputPaths, result) {
+function writeCommandOutputs(fixtureDir, outputPaths, result) {
   fs.writeFileSync(outputPaths.stdoutPath, normalizeOutput(result.stdout), 'utf8');
-  fs.writeFileSync(outputPaths.stderrPath, result.stderr, 'utf8');
+  fs.writeFileSync(outputPaths.stderrPath, normalizeFixturePaths(result.stderr, outputPaths.workspaceDir, fixtureDir), 'utf8');
+}
+
+function normalizeFixturePaths(value, workspaceDir, fixtureDir) {
+  return value.split(workspaceDir).join(fixtureDir);
 }
 
 function getTestsPath(argv) {
