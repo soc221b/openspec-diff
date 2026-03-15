@@ -2,21 +2,21 @@
   "name": "cli",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "projectType": "application",
-  "sourceRoot": "packages/cli",
+  "sourceRoot": "packages/cli/src",
   "targets": {
     "build": {
       "executor": "nx:run-commands",
       "outputs": ["{projectRoot}/bin"],
       "options": {
         "cwd": "packages/cli",
-        "command": "mkdir -p ./bin && cargo build --manifest-path ../core/Cargo.toml --target-dir ../../dist/target/core && cp ../../dist/target/core/debug/openspec-difftool ./bin/openspec-difftool && go build -o ./bin/openspec-diff ./cmd/openspec-diff"
+        "command": "npm --prefix ../core run build && npm run build"
       }
     },
     "format": {
       "executor": "nx:run-commands",
       "options": {
         "cwd": "packages/cli",
-        "command": "output=$(gofmt -l .) && [ -z \"$output\" ] || { printf '%s\\n' \"$output\"; exit 1; }"
+        "command": "npm run format"
       }
     },
     "test": {
@@ -26,11 +26,9 @@
         "parallel": false,
         "commands": [
           "npm install -g @fission-ai/openspec@latest",
-          "mkdir -p ./bin",
-          "cargo build --manifest-path ../core/Cargo.toml --target-dir ../../dist/target/core",
-          "cp ../../dist/target/core/debug/openspec-difftool ./bin/openspec-difftool",
-          "go build -o ./bin/openspec-diff ./cmd/openspec-diff",
-          "node ../../run-test.ts ./tests"
+          "npm --prefix ../core run build",
+          "npm run build",
+          "npm run test"
         ]
       }
     }
