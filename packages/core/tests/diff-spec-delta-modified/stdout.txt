@@ -1,4 +1,13 @@
-9c9
-< Original behavior.
+5d4
+< 
+7d5
+< 
+9c7
+< The system SHALL support capability-a.
 ---
-> Archived behavior.
+> The system SHALL support archived capability-a behavior.
+13c11,12
+< - **THEN** capability-a is available
+---
+> - **THEN** archived capability-a behavior is available
+> 

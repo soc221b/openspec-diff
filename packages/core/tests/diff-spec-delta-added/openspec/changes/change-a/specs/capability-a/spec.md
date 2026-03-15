@@ -2,9 +2,9 @@
 
 ## ADDED Requirements
 
-### Requirement: Added
-Added behavior.
+### Requirement: The system SHALL support added capability-a behavior
+The system SHALL support added capability-a behavior.
 
-#### Scenario: Display added behavior
-- **WHEN** added behavior is requested
-- **THEN** it is available
+#### Scenario: Added capability A behavior is requested
+- **WHEN** added capability-a behavior is requested
+- **THEN** added capability-a behavior is available

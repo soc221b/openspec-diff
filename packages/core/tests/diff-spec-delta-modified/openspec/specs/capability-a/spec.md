@@ -5,5 +5,9 @@ This specification covers capability-a.
 
 ## Requirements
 
-### Requirement: Existing
-Original behavior.
+### Requirement: The system SHALL support capability-a
+The system SHALL support capability-a.
+
+#### Scenario: Capability A is requested
+- **WHEN** capability-a is requested
+- **THEN** capability-a is available

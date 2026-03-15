@@ -20,7 +20,7 @@ fi
 
 (
 	cd "$TMP_DIR"
-	PATH="$FIXTURE_DIR/mock-bin:$PATH" FIXTURE_STDIN_PATH="$FIXTURE_DIR/stdin.txt" FIXTURE_STDOUT_PATH="$TMP_DIR/stdout.txt" FIXTURE_STDERR_PATH="$TMP_DIR/stderr.txt" python - <<'PY' "$CLI_BIN"
+	FIXTURE_STDIN_PATH="$FIXTURE_DIR/stdin.txt" FIXTURE_STDOUT_PATH="$TMP_DIR/stdout.txt" FIXTURE_STDERR_PATH="$TMP_DIR/stderr.txt" python - <<'PY' "$CLI_BIN"
 import codecs
 import os
 import re
@@ -39,6 +39,7 @@ command_name = os.path.basename(cli_bin)
 OUTPUT_IDLE_TIMEOUT_SECONDS = 0.2
 OUTPUT_POLL_INTERVAL_SECONDS = 0.01
 MAX_OUTPUT_SETTLE_SECONDS = 1.0
+PROCESS_EXIT_TIMEOUT_SECONDS = 5.0
 
 
 def decode_instruction(value: str, line_number: int) -> str:
@@ -145,6 +146,14 @@ def wait_for_output_to_settle(process, buffer):
         time.sleep(OUTPUT_POLL_INTERVAL_SECONDS)
 
 
+def wait_for_process_exit(process):
+    try:
+        process.wait(timeout=PROCESS_EXIT_TIMEOUT_SECONDS)
+        return True
+    except subprocess.TimeoutExpired:
+        return False
+
+
 command = [cli_bin]
 instructions = []
 seen_instruction = False
@@ -201,15 +210,16 @@ for line_number, instruction in instructions:
         break
 
 if not abort_requested and process.poll() is None:
-    last_line_number = instructions[-1][0] if instructions else 1
-    error_message = (
-        f"{stdin_path}:{last_line_number}: process did not exit after scripted input; "
-        "add ^C or explicit submit input such as \\n"
-    )
     if process.stdin is not None:
         process.stdin.close()
         process.stdin = None
-    os.killpg(process.pid, signal.SIGINT)
+    if not wait_for_process_exit(process):
+        last_line_number = instructions[-1][0] if instructions else 1
+        error_message = (
+            f"{stdin_path}:{last_line_number}: process did not exit after scripted input; "
+            "add ^C or explicit submit input such as \\n"
+        )
+        os.killpg(process.pid, signal.SIGINT)
 
 process.wait()
 stdout_thread.join()

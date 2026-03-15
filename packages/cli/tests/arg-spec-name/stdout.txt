@@ -1,5 +1,14 @@
 Diffing capability-b/spec.md
-1c1
-< # main capability b
+5d4
+< 
+7d5
+< 
+9c7
+< The system SHALL support capability-b.
 ---
-> # changed capability b
+> The system SHALL support updated capability-b behavior.
+13c11,12
+< - **THEN** capability-b is available
+---
+> - **THEN** updated capability-b behavior is available
+> 

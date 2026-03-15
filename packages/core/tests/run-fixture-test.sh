@@ -21,7 +21,7 @@ fi
 
 (
 	cd "$TMP_DIR"
-	PATH="$FIXTURE_DIR/mock-bin:$PATH" FIXTURE_STDIN_PATH="$FIXTURE_DIR/stdin.txt" FIXTURE_STDOUT_PATH="$TMP_DIR/stdout.txt" FIXTURE_STDERR_PATH="$TMP_DIR/stderr.txt" python - <<'PY' "$TOOL_BIN"
+	FIXTURE_STDIN_PATH="$FIXTURE_DIR/stdin.txt" FIXTURE_STDOUT_PATH="$TMP_DIR/stdout.txt" FIXTURE_STDERR_PATH="$TMP_DIR/stderr.txt" python - <<'PY' "$TOOL_BIN"
 import os
 import shlex
 import subprocess

@@ -1,4 +1,9 @@
-8c8
-< ### Requirement: Original Name
+5d4
+< 
+7,8c6
+< 
+< ### Requirement: The system SHALL support original capability-a behavior
 ---
-> ### Requirement: Renamed Name
+> ### Requirement: The system SHALL support renamed capability-a behavior
+13a12
+> 

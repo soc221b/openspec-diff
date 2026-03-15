@@ -2,4 +2,4 @@
 
 ## REMOVED Requirements
 
-### Requirement: Remove Me
+### Requirement: The system SHALL support removable capability-a behavior

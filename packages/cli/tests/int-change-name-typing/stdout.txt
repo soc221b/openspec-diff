@@ -6,7 +6,16 @@
 ✔ Select a change to diff beta-change
 
 Diffing capability-stdin/spec.md
-1c1
-< # main stdin capability
+5d4
+< 
+7d5
+< 
+9c7
+< The system SHALL support capability-stdin.
 ---
-> # changed stdin capability
+> The system SHALL support updated capability-stdin behavior.
+13c11,12
+< - **THEN** capability-stdin is available
+---
+> - **THEN** updated capability-stdin behavior is available
+> 

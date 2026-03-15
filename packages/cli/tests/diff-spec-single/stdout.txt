@@ -5,7 +5,16 @@
 ✔ Select a change to diff single-spec
 
 Diffing capability-a/spec.md
-1c1
-< # main capability a
+5d4
+< 
+7d5
+< 
+9c7
+< The system SHALL support capability-a.
 ---
-> # changed capability a
+> The system SHALL support updated capability-a behavior.
+13c11,12
+< - **THEN** capability-a is available
+---
+> - **THEN** updated capability-a behavior is available
+> 
