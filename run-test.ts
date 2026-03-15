@@ -87,7 +87,7 @@ async function main(argv = process.argv) {
 
       process.stdout.write('.');
     } catch (error) {
-      process.stdout.write('x');
+      process.stdout.write('F');
       fixtureFailures.push({
         fixtureDir,
         message: error instanceof Error ? error.message : String(error),
@@ -98,6 +98,8 @@ async function main(argv = process.argv) {
       }
     }
   }
+
+  process.stdout.write('\n');
 
   if (fixtureFailures.length > 0) {
     process.stderr.write(`${formatFailures(fixtureFailures)}\n`);

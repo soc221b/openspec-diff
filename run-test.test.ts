@@ -199,7 +199,7 @@ test('runFixtureCommand reports a timeout when scripted interactive input does n
   }
 });
 
-test('main prints dots and exits 0 when fixtures pass', async () => {
+test('main prints dots plus a trailing newline and exits 0 when fixtures pass', async () => {
   const { workspaceRoot, testsDir } = createCliFixtureWorkspace({
     prefix: 'run-test-main-pass-',
     fixtureName: 'pass-fixture',
@@ -222,14 +222,14 @@ test('main prints dots and exits 0 when fixtures pass', async () => {
     );
 
     assert.equal(completed.status, 0);
-    assert.equal(completed.stdout, '.');
+    assert.equal(completed.stdout, '.\n');
     assert.equal(completed.stderr, '');
   } finally {
     fs.rmSync(workspaceRoot, { recursive: true, force: true });
   }
 });
 
-test('main prints x and exits 1 when any fixture fails', async () => {
+test('main prints F plus a trailing newline and exits 1 when any fixture fails', async () => {
   const { workspaceRoot, testsDir, fixtureDir } = createCliFixtureWorkspace({
     prefix: 'run-test-main-fail-',
     fixtureName: 'fail-fixture',
@@ -251,7 +251,7 @@ test('main prints x and exits 1 when any fixture fails', async () => {
     );
 
     assert.equal(completed.status, 1);
-    assert.equal(completed.stdout, 'x');
+    assert.equal(completed.stdout, 'F\n');
     assert.match(
       completed.stderr,
       new RegExp(
