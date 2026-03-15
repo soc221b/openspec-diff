@@ -4,8 +4,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { assertFixtureResult, runFixtureCommand, runFixtureSuite } from './run-test.ts';
+
+const RUN_TEST_PATH = fileURLToPath(new URL('./run-test.ts', import.meta.url));
 
 function createCliFixtureWorkspace({
   prefix,
@@ -150,7 +153,7 @@ test('main prints dots and exits 0 when fixtures pass', async () => {
   try {
     const completed = spawnSync(
       'node',
-      ['/home/runner/work/openspec-diff/openspec-diff/run-test.ts', testsDir],
+      [RUN_TEST_PATH, testsDir],
       { encoding: 'utf8', env: { ...process.env, NODE_NO_WARNINGS: '1' } }
     );
 
@@ -179,7 +182,7 @@ test('main prints x and exits 1 when any fixture fails', async () => {
   try {
     const completed = spawnSync(
       'node',
-      ['/home/runner/work/openspec-diff/openspec-diff/run-test.ts', testsDir],
+      [RUN_TEST_PATH, testsDir],
       { encoding: 'utf8', env: { ...process.env, NODE_NO_WARNINGS: '1' } }
     );
 
