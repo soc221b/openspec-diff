@@ -60,7 +60,7 @@ const PACKAGE_CONTEXTS: Record<string, PackageContext> = {
   },
 };
 
-export async function main(argv = process.argv) {
+async function main(argv = process.argv) {
   const testsPath = getTestsPath(argv);
   ensurePathExists(testsPath);
   const fixtureFailures: FixtureFailure[] = [];
@@ -113,7 +113,7 @@ export async function main(argv = process.argv) {
   process.exitCode = 0;
 }
 
-export async function runFixtureSuite({
+async function runFixtureSuite({
   workspaceRoot,
   testsPath,
 }: {

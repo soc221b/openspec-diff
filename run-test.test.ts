@@ -6,7 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { assertFixtureResult, runFixtureCommand, runFixtureSuite } from './run-test.ts';
+import { assertFixtureResult, runFixtureCommand } from './run-test.ts';
 
 const RUN_TEST_PATH = fileURLToPath(new URL('./run-test.ts', import.meta.url));
 
@@ -83,8 +83,8 @@ test('runFixtureCommand captures stdout, stderr, and exit code from { stdin, pat
   }
 });
 
-test('runFixtureSuite handles scripted interactive fixtures through the shared runner pipeline', async () => {
-  const { workspaceRoot, testsDir } = createCliFixtureWorkspace({
+test('runFixtureCommand handles scripted interactive fixtures through the shared runner pipeline', async () => {
+  const { workspaceRoot, fixtureDir } = createCliFixtureWorkspace({
     prefix: 'run-test-suite-',
     fixtureName: 'interactive-fixture',
     runnerLines: [
@@ -100,14 +100,26 @@ test('runFixtureSuite handles scripted interactive fixtures through the shared r
   });
 
   try {
-    assert.deepEqual(await runFixtureSuite({ workspaceRoot, testsPath: testsDir }), []);
+    const stdin = fs.readFileSync(path.join(fixtureDir, 'stdin.txt'), 'utf8');
+
+    assert.deepEqual(
+      await runFixtureCommand({
+        stdin,
+        path: fixtureDir,
+      }),
+      {
+        stdout: 'HELLO\n',
+        stderr: '',
+        exitCode: 0,
+      }
+    );
   } finally {
     fs.rmSync(workspaceRoot, { recursive: true, force: true });
   }
 });
 
-test('runFixtureSuite reports a timeout when scripted interactive input does not make the process exit', async () => {
-  const { workspaceRoot, testsDir, fixtureDir } = createCliFixtureWorkspace({
+test('runFixtureCommand reports a timeout when scripted interactive input does not make the process exit', async () => {
+  const { workspaceRoot, fixtureDir } = createCliFixtureWorkspace({
     prefix: 'run-test-timeout-',
     fixtureName: 'timeout-fixture',
     runnerLines: [
@@ -122,14 +134,17 @@ test('runFixtureSuite reports a timeout when scripted interactive input does not
   });
 
   try {
-    const failures = await runFixtureSuite({ workspaceRoot, testsPath: testsDir });
+    const stdin = fs.readFileSync(path.join(fixtureDir, 'stdin.txt'), 'utf8');
 
-    assert.deepEqual(failures, [
+    await assert.rejects(
+      runFixtureCommand({
+        stdin,
+        path: fixtureDir,
+      }),
       {
-        fixtureDir,
         message: `${path.join(fixtureDir, 'stdin.txt')}:2: process did not exit after scripted input; add ^C or explicit submit input such as \\n`,
-      },
-    ]);
+      }
+    );
   } finally {
     fs.rmSync(workspaceRoot, { recursive: true, force: true });
   }
