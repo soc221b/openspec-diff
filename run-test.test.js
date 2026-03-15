@@ -44,3 +44,21 @@ test('readExpectedExitCode defaults to zero when exit-code.txt is missing', () =
 test('getActualExitCode converts signal exits to shell-style codes', () => {
   assert.equal(__test.getActualExitCode({ exitCode: null, signalCode: 'SIGINT' }), 130);
 });
+
+test('createContext maps CLI tests to the interactive binary path', () => {
+  const workspaceRoot = '/repo';
+  const context = __test.createContext(workspaceRoot, '/repo/packages/cli/tests');
+
+  assert.equal(context.interactive, true);
+  assert.equal(context.commandName, 'openspec-diff');
+  assert.equal(__test.getCommandPath(context), '/repo/packages/cli/bin/openspec-diff');
+});
+
+test('createContext maps core fixture paths to the compiled difftool path', () => {
+  const workspaceRoot = '/repo';
+  const context = __test.createContext(workspaceRoot, '/repo/packages/core/tests/diff-fixture');
+
+  assert.equal(context.interactive, false);
+  assert.equal(context.commandName, 'openspec-difftool');
+  assert.equal(__test.getCommandPath(context), '/repo/dist/target/core/debug/openspec-difftool');
+});

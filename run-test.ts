@@ -11,6 +11,20 @@ const OUTPUT_POLL_INTERVAL_MS = 10;
 const MAX_OUTPUT_SETTLE_MS = 1000;
 const PROCESS_EXIT_TIMEOUT_MS = 5000;
 const SIGNAL_EXIT_CODE_OFFSET = 128;
+const TESTS_DIRECTORY_NAME = 'tests';
+const PACKAGE_CONTEXTS = {
+  cli: {
+    interactive: true,
+    commandName: 'openspec-diff',
+    resolveCommandPath: ({ packageDir }) => path.join(packageDir, 'bin', 'openspec-diff'),
+  },
+  core: {
+    interactive: false,
+    commandName: 'openspec-difftool',
+    resolveCommandPath: ({ workspaceRoot }) =>
+      path.join(workspaceRoot, 'dist', 'target', 'core', 'debug', 'openspec-difftool'),
+  },
+};
 
 if (require.main === module) {
   main().catch(handleFatalError);
@@ -85,64 +99,14 @@ function runNonInteractiveCommand(commandPlan, outputPaths) {
 }
 
 async function runInteractiveCommand(commandPlan, outputPaths) {
-  const child = spawn(commandPlan.command[0], commandPlan.command.slice(1), {
-    cwd: outputPaths.workspaceDir,
-    detached: true,
-    stdio: ['pipe', 'pipe', 'pipe'],
-  });
+  const child = spawnInteractiveProcess(commandPlan, outputPaths.workspaceDir);
   const closePromise = waitForChildClose(child);
-
-  child.stdout.setEncoding('utf8');
-  child.stderr.setEncoding('utf8');
-
-  let stdout = '';
-  let stderr = '';
-  let aborted = false;
-  let timedOut = false;
-
-  child.stdout.on('data', (chunk) => {
-    stdout += chunk;
-  });
-
-  child.stderr.on('data', (chunk) => {
-    stderr += chunk;
-  });
-
-  for (const instruction of commandPlan.instructions) {
-    if (instruction.value === '^C') {
-      aborted = true;
-      await waitForOutputToSettle(child, () => stdout.length);
-      interruptProcessGroup(child.pid);
-      break;
-    }
-
-    child.stdin.write(decodeInstruction(instruction.value, commandPlan.stdinPath, instruction.lineNumber));
-    await waitForOutputToSettle(child, () => stdout.length);
-
-    if (child.exitCode !== null) {
-      break;
-    }
-  }
-
-  if (!aborted && child.exitCode === null) {
-    child.stdin.end();
-
-    if (!(await waitForProcessExit(child, PROCESS_EXIT_TIMEOUT_MS))) {
-      timedOut = true;
-      interruptProcessGroup(child.pid);
-    }
-  }
-
+  const output = collectChildOutput(child);
+  const aborted = await applyInteractiveInstructions(child, commandPlan, output);
+  const timedOut = await finishInteractiveProcess(child, aborted);
   const closeDetails = await closePromise;
 
-  return {
-    stdout,
-    stderr,
-    exitCode: closeDetails.code,
-    signalCode: closeDetails.signal,
-    aborted,
-    timedOut,
-  };
+  return createInteractiveResult(output, closeDetails, aborted, timedOut);
 }
 
 function validateCommandResult(result, commandPlan) {
@@ -182,22 +146,13 @@ function assertFixtureOutputs(fixtureDir, outputPaths) {
 }
 
 function createContext(workspaceRoot, testsPath) {
-  const testsDir = path.basename(testsPath) === 'tests' ? testsPath : path.dirname(testsPath);
+  const testsDir = path.basename(testsPath) === TESTS_DIRECTORY_NAME ? testsPath : path.dirname(testsPath);
   const packageDir = path.dirname(testsDir);
+  const packageContext = PACKAGE_CONTEXTS[path.basename(packageDir)];
 
-  if (path.basename(packageDir) === 'cli') {
+  if (packageContext) {
     return {
-      interactive: true,
-      commandName: 'openspec-diff',
-      workspaceRoot,
-      packageDir,
-    };
-  }
-
-  if (path.basename(packageDir) === 'core') {
-    return {
-      interactive: false,
-      commandName: 'openspec-difftool',
+      ...packageContext,
       workspaceRoot,
       packageDir,
     };
@@ -221,6 +176,14 @@ function prepareFixtureWorkspace(context, fixtureDir, tempDir) {
     stderrPath,
     commandPath: getCommandPath(context),
   };
+}
+
+function spawnInteractiveProcess(commandPlan, workspaceDir) {
+  return spawn(commandPlan.command[0], commandPlan.command.slice(1), {
+    cwd: workspaceDir,
+    detached: true,
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
 }
 
 function parseFixturePlan(fixtureDir, commandPath, commandName, interactive) {
@@ -318,11 +281,7 @@ function initializeGitWorkspace(workspaceDir) {
 }
 
 function getCommandPath(context) {
-  if (context.interactive) {
-    return path.join(context.packageDir, 'bin', 'openspec-diff');
-  }
-
-  return path.join(context.workspaceRoot, 'dist', 'target', 'core', 'debug', 'openspec-difftool');
+  return context.resolveCommandPath(context);
 }
 
 function getInstructionLines(stdinPath) {
@@ -476,6 +435,65 @@ function normalizeOutput(value) {
   return lastScreenState.replace(/\u001b\[\d+A/g, '');
 }
 
+function collectChildOutput(child) {
+  const output = { stdout: '', stderr: '' };
+
+  child.stdout.setEncoding('utf8');
+  child.stderr.setEncoding('utf8');
+  child.stdout.on('data', (chunk) => {
+    output.stdout += chunk;
+  });
+  child.stderr.on('data', (chunk) => {
+    output.stderr += chunk;
+  });
+
+  return output;
+}
+
+async function applyInteractiveInstructions(child, commandPlan, output) {
+  for (const instruction of commandPlan.instructions) {
+    if (instruction.value === '^C') {
+      await waitForOutputToSettle(child, () => output.stdout.length);
+      interruptProcessGroup(child.pid);
+      return true;
+    }
+
+    child.stdin.write(decodeInstruction(instruction.value, commandPlan.stdinPath, instruction.lineNumber));
+    await waitForOutputToSettle(child, () => output.stdout.length);
+
+    if (child.exitCode !== null) {
+      break;
+    }
+  }
+
+  return false;
+}
+
+async function finishInteractiveProcess(child, aborted) {
+  if (aborted || child.exitCode !== null) {
+    return false;
+  }
+
+  child.stdin.end();
+  if (await waitForProcessExit(child, PROCESS_EXIT_TIMEOUT_MS)) {
+    return false;
+  }
+
+  interruptProcessGroup(child.pid);
+  return true;
+}
+
+function createInteractiveResult(output, closeDetails, aborted, timedOut) {
+  return {
+    stdout: output.stdout,
+    stderr: output.stderr,
+    exitCode: closeDetails.code,
+    signalCode: closeDetails.signal,
+    aborted,
+    timedOut,
+  };
+}
+
 async function waitForOutputToSettle(child, getLength) {
   let previousLength = getLength();
   let idleDeadline = Date.now() + OUTPUT_IDLE_TIMEOUT_MS;
@@ -624,7 +642,9 @@ function handleFatalError(error) {
 
 module.exports = {
   __test: {
+    createContext,
     getActualExitCode,
+    getCommandPath,
     parseInvocation,
     readExpectedExitCode,
     stripInlineComment,
