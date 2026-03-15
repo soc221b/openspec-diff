@@ -7,25 +7,17 @@ import {
   isChangeSpecPath,
   loadDiffSnapshot,
 } from "./change-spec-diff.js";
-import { getWelcomeMessage } from "./message.js";
 
-let helloCommand: vscode.Disposable | undefined;
 let diffController: DiffController | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
-  helloCommand = vscode.commands.registerCommand("openspecDiff.hello", () => {
-    void vscode.window.showInformationMessage(getWelcomeMessage());
-  });
-
   diffController = new DiffController();
-  context.subscriptions.push(helloCommand, diffController);
+  context.subscriptions.push(diffController);
 }
 
 export function deactivate() {
   diffController?.dispose();
   diffController = undefined;
-  helloCommand?.dispose();
-  helloCommand = undefined;
 }
 
 class DiffController implements vscode.Disposable {
