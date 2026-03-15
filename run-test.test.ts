@@ -59,6 +59,46 @@ test('runFixtureSuite handles scripted interactive fixtures through the shared r
   }
 });
 
+test('runFixtureSuite reports a timeout when scripted interactive input does not make the process exit', async () => {
+  const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'run-test-timeout-'));
+  const packageDir = path.join(workspaceRoot, 'packages', 'cli');
+  const testsDir = path.join(packageDir, 'tests');
+  const fixtureDir = path.join(testsDir, 'timeout-fixture');
+  const openspecDir = path.join(fixtureDir, 'openspec');
+  const binDir = path.join(packageDir, 'bin');
+  const runnerPath = path.join(binDir, 'openspec-diff');
+
+  try {
+    fs.mkdirSync(openspecDir, { recursive: true });
+    fs.mkdirSync(binDir, { recursive: true });
+    fs.writeFileSync(
+      runnerPath,
+      [
+        '#!/usr/bin/env node',
+        'setInterval(() => {}, 1000);',
+        'process.stdin.resume();',
+        'process.stdin.setEncoding("utf8");',
+        'process.stdin.on("data", () => {});',
+      ].join('\n'),
+      'utf8'
+    );
+    fs.chmodSync(runnerPath, 0o755);
+    fs.writeFileSync(path.join(fixtureDir, 'stdin.txt'), 'openspec-diff\nhello\\n\n', 'utf8');
+    fs.writeFileSync(path.join(fixtureDir, 'stdout.txt'), '', 'utf8');
+
+    const failures = await runFixtureSuite({ workspaceRoot, testsPath: testsDir });
+
+    assert.deepEqual(failures, [
+      {
+        fixtureDir,
+        message: `${path.join(fixtureDir, 'stdin.txt')}:2: process did not exit after scripted input; add ^C or explicit submit input such as \\n`,
+      },
+    ]);
+  } finally {
+    fs.rmSync(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
 test('assertFixtureResult compares stdout, stderr, and exit codes together', () => {
   const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'run-test-assert-'));
   const workspaceDir = path.join(fixtureDir, 'workspace');

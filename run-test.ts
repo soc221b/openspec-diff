@@ -343,11 +343,11 @@ function normalizeFixturePaths(value: string, workspaceDir: string, fixtureDir: 
   return value.split(workspaceDir).join(fixtureDir);
 }
 
-function getWorkspaceRoot(moduleUrl) {
+function getWorkspaceRoot(moduleUrl: string) {
   return path.dirname(fileURLToPath(moduleUrl));
 }
 
-function getTestsPath(argv) {
+function getTestsPath(argv: string[]) {
   const targetPath = argv[2];
 
   if (!targetPath) {
