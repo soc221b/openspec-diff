@@ -8,6 +8,6 @@ Lorem ipsum
 ### Requirement: Password sign-in
 The system SHALL support password sign-in.
 
-#### Scenario: Lorem ipsum
+#### Scenario: A customer signs in with a password
 - **WHEN** lorem ipsum
 - **THEN** lorem ipsum
