@@ -1,0 +1,15 @@
+diff --git a/tmp/openspec-diff/cfg-difftool/openspec/specs/auth/spec.md b/tmp/openspec-diff/cfg-difftool/openspec/changes/single-sign-on/specs/auth/spec.md
+index e08493f..023b997 100644
+--- a/tmp/openspec-diff/cfg-difftool/openspec/specs/auth/spec.md
++++ b/tmp/openspec-diff/cfg-difftool/openspec/changes/single-sign-on/specs/auth/spec.md
+@@ -2,10 +2,6 @@
+ ## Purpose
+ _
+ ## Requirements
+-### Requirement: Single sign-on
+-_ SHALL _
+-#### Scenario:
+-- **THEN**
+ ### Requirement: Password sign-in
+ _ SHALL _
+ #### Scenario:

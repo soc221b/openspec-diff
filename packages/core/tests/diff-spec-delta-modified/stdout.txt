@@ -1,4 +1,4 @@
-9c9
-< - **THEN** lorem ipsum
+8c8
+< - **THEN**
 ---
-> - **THEN** Lorem ipsum dolor sit amet
+> - **THEN** _

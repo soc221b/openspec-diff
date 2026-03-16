@@ -1,0 +1,13 @@
+diff --git a/openspec/specs/transaction/spec.md b/openspec/changes/digital-wallet/specs/transaction/spec.md
+index da4f3bb..8c21cdb 100644
+--- a/openspec/specs/transaction/spec.md
++++ b/openspec/changes/digital-wallet/specs/transaction/spec.md
+@@ -6,7 +6,7 @@ Lorem ipsum
+ Lorem ipsum SHALL dolor sit amet
+ #### Scenario: Lorem ipsum
+ - **WHEN** lorem ipsum
+-- **THEN** lorem ipsum
++- **THEN** Lorem ipsum dolor sit amet
+ ### Requirement: Payment details
+ Lorem ipsum SHALL dolor sit amet
+ #### Scenario: Lorem ipsum

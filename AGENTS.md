@@ -1,3 +1,5 @@
 # AGENTS.md
 
-Each spec's scenario should have a corresponding BDD E2E test.
+## Validation
+
+Run tests at the end of the task, after all code changes are complete, and fix any warnings and errors related to the code you changed.

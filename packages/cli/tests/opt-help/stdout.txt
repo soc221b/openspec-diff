@@ -4,4 +4,5 @@ Show changes between delta specs of a change and the main specs
 
 Options:
   -h, --help       display help for command
+  --difftool       command used to diff two files
   --specs          diff all specs without prompting

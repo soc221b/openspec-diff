@@ -1,7 +1,9 @@
 import { spawn } from "node:child_process";
-import { fileURLToPath } from "node:url";
 import path from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
+
+import { Command, CommanderError } from "commander";
 
 import { run } from "./app.ts";
 
@@ -11,51 +13,85 @@ Show changes between delta specs of a change and the main specs
 
 Options:
   -h, --help       display help for command
+  --difftool       command used to diff two files
   --specs          diff all specs without prompting
 `;
 
-function hasHelpArg(args: string[]): boolean {
-  return args.some((arg) => arg === "--help" || arg === "-h");
+type ParsedCliArgs =
+  | {
+      help: true;
+    }
+  | {
+      help: false;
+      changeName: string;
+      diffTool: string;
+      specName: string;
+    };
+
+function createProgram(): Command {
+  return new Command()
+    .name("openspec-diff")
+    .argument("[change-name]")
+    .argument("[spec-name]")
+    .option("--difftool <command>", "command used to diff two files")
+    .option("--specs", "diff all specs without prompting")
+    .helpOption("-h, --help", "display help for command")
+    .allowExcessArguments(false)
+    .exitOverride()
+    .configureOutput({
+      writeErr: () => {},
+      writeOut: () => {},
+    });
 }
 
-function parsePositionalArgs(args: string[]): [string, string] {
-  const positionalArgs: string[] = [];
-  let allSpecs = false;
+function parseArgs(args: string[]): ParsedCliArgs {
+  const program = createProgram();
 
-  for (const arg of args) {
-    if (arg === "--specs") {
-      allSpecs = true;
-      continue;
+  try {
+    program.parse(args, { from: "user" });
+  } catch (error) {
+    if (error instanceof CommanderError) {
+      if (error.code === "commander.helpDisplayed") {
+        return { help: true };
+      }
+
+      if (error.code === "commander.excessArguments") {
+        throw new Error(
+          "expected at most one change name argument and one spec name argument",
+        );
+      }
+
+      if (error.code === "commander.unknownOption") {
+        throw new Error(error.message.replace(/^error: /, "").replace(/'/g, '"'));
+      }
     }
-    if (arg.startsWith("-")) {
-      throw new Error(`unknown option ${JSON.stringify(arg)}`);
-    }
-    positionalArgs.push(arg);
+
+    throw error;
   }
 
-  if (positionalArgs.length > 2) {
-    throw new Error(
-      "expected at most one change name argument and one spec name argument",
-    );
-  }
+  const positionalArgs = program.args as string[];
+  const options = program.opts<{ difftool?: string; specs?: boolean }>();
+  const changeName = positionalArgs[0] ?? "";
+  const inputSpecName = positionalArgs[1] ?? "";
 
-  if (allSpecs) {
-    if (positionalArgs.length === 2) {
+  if (options.specs) {
+    if (inputSpecName !== "") {
       throw new Error("cannot use --specs with a spec name argument");
     }
-    if (positionalArgs.length === 0) {
-      return ["", "all"];
-    }
-    return [positionalArgs[0], "all"];
+    return {
+      help: false,
+      changeName,
+      diffTool: options.difftool ?? "",
+      specName: "all",
+    };
   }
 
-  if (positionalArgs.length === 0) {
-    return ["", ""];
-  }
-  if (positionalArgs.length === 1) {
-    return [positionalArgs[0], ""];
-  }
-  return [positionalArgs[0], positionalArgs[1]];
+  return {
+    help: false,
+    changeName,
+    diffTool: options.difftool ?? "",
+    specName: inputSpecName,
+  };
 }
 
 async function runCommand(
@@ -94,18 +130,20 @@ function coreDiffCommand(): string {
 }
 
 async function main(args = process.argv.slice(2)): Promise<void> {
-  if (hasHelpArg(args)) {
+  const parsed = parseArgs(args);
+
+  if (parsed.help) {
     process.stdout.write(HELP_TEXT);
     return;
   }
 
-  const [changeName, specName] = parsePositionalArgs(args);
   await run(
     process.stdin,
     process.stdout,
     ".",
-    changeName,
-    specName,
+    parsed.changeName,
+    parsed.specName,
+    parsed.diffTool,
     coreDiffCommand(),
     runCommand,
   );

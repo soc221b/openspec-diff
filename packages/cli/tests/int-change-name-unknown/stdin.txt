@@ -1,2 +1,0 @@
-openspec-diff
-missing-change\n # \n submits an unknown named change

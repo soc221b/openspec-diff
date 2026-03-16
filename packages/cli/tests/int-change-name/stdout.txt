@@ -2,3 +2,4 @@
 ❯ interactive-no-selection
 
 ↑↓ navigate • ⏎ select
+No change selected. Aborting.

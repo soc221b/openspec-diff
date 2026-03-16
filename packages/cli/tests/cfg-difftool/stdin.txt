@@ -1,0 +1,1 @@
+openspec-diff digital-wallet transaction

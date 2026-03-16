@@ -1,4 +1,4 @@
-# Auth Specification - Changes
+# Specification
 ## RENAMED Requirements
 - FROM: `### Requirement: Single sign-on`
-- TO: `### Requirement: Single sign-on (SSO)`
+- TO: `### Requirement: SSO`

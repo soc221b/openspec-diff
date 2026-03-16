@@ -1,0 +1,1 @@
+openspec-diff --difftool "git --no-pager diff --no-index --no-color" digital-wallet transaction

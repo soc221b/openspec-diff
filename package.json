@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Monorepo for the OpenSpec Diff CLI and VSCode extension.",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "nx run-many -t build",
     "format": "nx run-many -t format",

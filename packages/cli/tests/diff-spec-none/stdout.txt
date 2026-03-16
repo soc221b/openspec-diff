@@ -1,5 +1,0 @@
-? Select specs to diff
-❯ ◯ auth
-  ◯ transaction
-
-↑↓ navigate • space toggle • ⏎ submit

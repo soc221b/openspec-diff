@@ -1,0 +1,3 @@
+{
+  "difftool": "sh -c 'spec_subpath=${1#./openspec/specs/} && spec_subpath=${spec_subpath#openspec/specs/} && spec_subpath=${spec_subpath#*/openspec/specs/} && tmp_root=/tmp/openspec-diff/cfg-difftool && rm -rf \"$tmp_root\" && main_target=$tmp_root/openspec/specs/$spec_subpath && change_target=$tmp_root/openspec/changes/single-sign-on/specs/$spec_subpath && mkdir -p \"$(dirname \"$main_target\")\" \"$(dirname \"$change_target\")\" && cp \"$1\" \"$main_target\" && cp \"$2\" \"$change_target\" && git --no-pager diff --no-index --no-color \"$main_target\" \"$change_target\"' sh \"$LOCAL\" \"$REMOTE\""
+}

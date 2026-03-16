@@ -1,4 +1,4 @@
 5c5
 < ### Requirement: Single sign-on
 ---
-> ### Requirement: Single sign-on (SSO)
+> ### Requirement: SSO

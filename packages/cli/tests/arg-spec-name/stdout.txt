@@ -1,4 +1,3 @@
-Diffing transaction/spec.md
 5,9d4
 < ### Requirement: Transaction history
 < Lorem ipsum SHALL dolor sit amet

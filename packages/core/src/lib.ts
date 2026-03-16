@@ -17,11 +17,17 @@ import {
 } from "../ts/change-spec.ts";
 
 const ABORTED_ARCHIVE_MARKER = "Aborted. No files were changed.";
+const ARCHIVE_COMMAND_TIMEOUT_MS = 500;
+const CONFIG_DIRECTORY_NAME = "openspec-diff";
+const CONFIG_FILE_NAME = "config.json";
+const LOCAL_PLACEHOLDER = "$LOCAL";
+const REMOTE_PLACEHOLDER = "$REMOTE";
 
 export interface ArchiveCommandOutput {
   status: number | null;
   stdout: string;
   stderr: string;
+  timedOut: boolean;
 }
 
 export function diff(uri1: string, uri2: string): number {
@@ -32,20 +38,27 @@ export function diffWithOpenspecCommand(
   uri1: string,
   uri2: string,
   openspecCommand: string,
+  diffToolCommand = "",
 ): number {
   const prepared = prepareDiffInputs(uri1, uri2, openspecCommand);
+  const resolvedDiffToolCommand = resolveConfiguredDiffToolCommand(
+    diffToolCommand,
+  );
+  const diffCommand = resolveDiffCommand(
+    resolvedDiffToolCommand,
+    diffToolPathFor(prepared.left),
+    diffToolPathFor(prepared.right),
+  );
 
   try {
-    const result = spawnSync(
-      "git",
-      ["difftool", "--no-prompt", "--no-index", prepared.left, prepared.right],
-      {
-        stdio: "inherit",
-      },
-    );
+    const result = spawnSync(diffCommand.name, diffCommand.args, {
+      stdio: "inherit",
+    });
 
     if (result.error) {
-      throw new Error(`failed to run git difftool: ${result.error.message}`);
+      throw new Error(
+        `failed to run ${diffCommand.name}: ${result.error.message}`,
+      );
     }
 
     return normalizeDiffExitCode(result.status);
@@ -84,6 +97,177 @@ export function archiveOutputDetails(
     return output.stdout;
   }
   return fallback;
+}
+
+export interface DiffCommand {
+  name: string;
+  args: string[];
+}
+
+export function defaultConfigPath(homeDirectory = os.homedir()): string {
+  return path.join(
+    homeDirectory,
+    ".config",
+    CONFIG_DIRECTORY_NAME,
+    CONFIG_FILE_NAME,
+  );
+}
+
+export function loadConfiguredDiffToolCommand(configPath: string): string {
+  if (!fs.existsSync(configPath)) {
+    return "";
+  }
+
+  let parsedConfig: unknown;
+  try {
+    parsedConfig = JSON.parse(fs.readFileSync(configPath, "utf8")) as unknown;
+  } catch (error) {
+    throw new Error(
+      `failed to parse config ${configPath}: ${toErrorMessage(error)}`,
+    );
+  }
+
+  if (
+    parsedConfig === null ||
+    typeof parsedConfig !== "object" ||
+    Array.isArray(parsedConfig)
+  ) {
+    throw new Error(`failed to parse config ${configPath}: expected an object`);
+  }
+
+  const diffToolCommand = (parsedConfig as { difftool?: unknown }).difftool;
+  if (diffToolCommand === undefined) {
+    return "";
+  }
+
+  if (typeof diffToolCommand !== "string") {
+    throw new Error(
+      `failed to parse config ${configPath}: "difftool" must be a string`,
+    );
+  }
+
+  return diffToolCommand;
+}
+
+export function resolveConfiguredDiffToolCommand(
+  diffToolCommand: string,
+  configPath = defaultConfigPath(),
+): string {
+  if (diffToolCommand.trim() !== "") {
+    return diffToolCommand;
+  }
+
+  return loadConfiguredDiffToolCommand(configPath);
+}
+
+export function resolveDiffCommand(
+  diffToolCommand: string,
+  leftPath: string,
+  rightPath: string,
+): DiffCommand {
+  const trimmedCommand = diffToolCommand.trim();
+  if (trimmedCommand === "") {
+    return {
+      name: "diff",
+      args: [leftPath, rightPath],
+    };
+  }
+
+  const tokens = splitCommand(trimmedCommand);
+  if (tokens.length === 0) {
+    throw new Error("difftool command cannot be empty");
+  }
+
+  const usesLocalPlaceholder = tokens.some((token) =>
+    token.includes(LOCAL_PLACEHOLDER),
+  );
+  const usesRemotePlaceholder = tokens.some((token) =>
+    token.includes(REMOTE_PLACEHOLDER),
+  );
+  const resolvedTokens = tokens.map((token) =>
+    token
+      .replaceAll(LOCAL_PLACEHOLDER, leftPath)
+      .replaceAll(REMOTE_PLACEHOLDER, rightPath),
+  );
+  const [name, ...args] = resolvedTokens;
+
+  if (!usesLocalPlaceholder) {
+    args.push(leftPath);
+  }
+  if (!usesRemotePlaceholder) {
+    args.push(rightPath);
+  }
+
+  return { name, args };
+}
+
+export function splitCommand(command: string): string[] {
+  const tokens: string[] = [];
+  let current = "";
+  let quote: '"' | "'" | null = null;
+  let escaping = false;
+
+  for (const char of command) {
+    if (escaping) {
+      current += char;
+      escaping = false;
+      continue;
+    }
+
+    if (quote === "'") {
+      if (char === "'") {
+        quote = null;
+        continue;
+      }
+      current += char;
+      continue;
+    }
+
+    if (quote === '"') {
+      if (char === '"') {
+        quote = null;
+        continue;
+      }
+      if (char === "\\") {
+        escaping = true;
+        continue;
+      }
+      current += char;
+      continue;
+    }
+
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+
+    if (char === "\\") {
+      escaping = true;
+      continue;
+    }
+
+    if (/\s/.test(char)) {
+      if (current !== "") {
+        tokens.push(current);
+        current = "";
+      }
+      continue;
+    }
+
+    current += char;
+  }
+
+  if (quote !== null) {
+    throw new Error("difftool command has an unterminated quote");
+  }
+  if (escaping) {
+    throw new Error("difftool command ends with an incomplete escape");
+  }
+  if (current !== "") {
+    tokens.push(current);
+  }
+
+  return tokens;
 }
 
 interface PreparedDiff {
@@ -135,6 +319,19 @@ function absolutePathFor(filePath: string): string {
   }
 
   return path.join(process.cwd(), filePath);
+}
+
+function diffToolPathFor(filePath: string): string {
+  const relativePath = path.relative(process.cwd(), filePath);
+  if (
+    relativePath !== "" &&
+    !relativePath.startsWith(`..${path.sep}`) &&
+    relativePath !== ".."
+  ) {
+    return relativePath;
+  }
+
+  return filePath;
 }
 
 function looksLikeDeltaSpecPath(filePath: string): boolean {
@@ -223,6 +420,7 @@ function runArchiveCommand(
     {
       cwd: tempRoot,
       encoding: "utf8",
+      timeout: ARCHIVE_COMMAND_TIMEOUT_MS,
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
@@ -234,16 +432,13 @@ function runArchiveCommand(
         `failed to preprocess delta spec ${context.changeSpecPath}: openspec command not found`,
       );
     }
-
-    throw new Error(
-      `failed to preprocess delta spec ${context.changeSpecPath}: ${error.message}`,
-    );
   }
 
   return {
     status: completed.status,
     stdout: (completed.stdout ?? "").trim(),
     stderr: (completed.stderr ?? "").trim(),
+    timedOut: isProcessTimeout(completed.error),
   };
 }
 
@@ -251,7 +446,7 @@ function validateArchiveOutput(
   changeSpecPath: string,
   output: ArchiveCommandOutput,
 ): void {
-  if (output.status !== 0) {
+  if (output.status !== 0 && !output.timedOut) {
     throw new Error(
       `failed to preprocess delta spec ${changeSpecPath}: ${archiveOutputDetails(output, `openspec archive exited with status ${output.status}`)}`,
     );
@@ -273,6 +468,15 @@ function ensureSynthesizedSpecExists(
       `failed to preprocess delta spec ${changeSpecPath}: archive did not produce ${synthesizedSpecPath}`,
     );
   }
+}
+
+function isProcessTimeout(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as NodeJS.ErrnoException).code === "ETIMEDOUT"
+  );
 }
 
 function copyFile(source: string, target: string): void {

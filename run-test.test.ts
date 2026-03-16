@@ -167,6 +167,41 @@ test('runFixtureCommand writes only stdout for successful scripted interactive f
   }
 });
 
+test('runFixtureCommand trims trailing padding left by cursor movement when rendering terminal output', async () => {
+  const { workspaceRoot, fixtureDir } = createCliFixtureWorkspace({
+    prefix: 'run-test-trailing-space-',
+    fixtureName: 'trailing-space-fixture',
+    runnerLines: [
+      '#!/usr/bin/env node',
+      'process.stdout.write("✔ Select specs to diff\\u001b[23G\\n");',
+    ],
+    stdin: 'openspec-diff\n',
+    stdout: '✔ Select specs to diff',
+    exitCode: 0,
+  });
+  let outputPath: string | null = null;
+
+  try {
+    const stdin = fs.readFileSync(path.join(fixtureDir, 'stdin.txt'), 'utf8');
+    const result = await runFixtureCommand({
+      stdin,
+      path: fixtureDir,
+    });
+    outputPath = result.path;
+
+    assert.deepEqual(readOutputDirectory(result.path), {
+      stdout: '✔ Select specs to diff',
+      stderr: null,
+      exitCode: null,
+    });
+  } finally {
+    if (outputPath) {
+      fs.rmSync(outputPath, { recursive: true, force: true });
+    }
+    fs.rmSync(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
 test('runFixtureCommand reports a timeout when scripted interactive input does not make the process exit', async () => {
   const { workspaceRoot, fixtureDir } = createCliFixtureWorkspace({
     prefix: 'run-test-timeout-',
@@ -225,6 +260,52 @@ test('main prints dots plus a trailing newline and exits 0 when fixtures pass', 
     assert.equal(completed.stdout, '.\n');
     assert.equal(completed.stderr, '');
   } finally {
+    fs.rmSync(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
+test('main can run multiple fixtures in parallel when fixture concurrency is greater than one', async () => {
+  const overlapPath = path.join(os.tmpdir(), `run-test-overlap-${process.pid}-${Date.now()}.txt`);
+  const lockPath = path.join(os.tmpdir(), `run-test-lock-${process.pid}-${Date.now()}`);
+  const { workspaceRoot, testsDir } = createCliFixtureWorkspace({
+    prefix: 'run-test-main-parallel-',
+    fixtureName: 'parallel-fixture-1',
+    runnerLines: [
+      '#!/usr/bin/env node',
+      'const fs = require("node:fs");',
+      `const overlapPath = ${JSON.stringify(overlapPath)};`,
+      `const lockPath = ${JSON.stringify(lockPath)};`,
+      'let ownsLock = false;',
+      'try { fs.mkdirSync(lockPath); ownsLock = true; } catch (error) { if (!error || typeof error !== "object" || !("code" in error) || error.code !== "EEXIST") { throw error; } fs.writeFileSync(overlapPath, "overlap\\n", "utf8"); }',
+      'setTimeout(() => { if (ownsLock) { fs.rmSync(lockPath, { recursive: true, force: true }); } process.stdout.write("done\\n"); }, 400);',
+    ],
+    stdin: 'openspec-diff\n',
+    stdout: 'done\n',
+    exitCode: 0,
+  });
+  const secondFixtureDir = path.join(testsDir, 'parallel-fixture-2');
+
+  fs.mkdirSync(path.join(secondFixtureDir, 'openspec'), { recursive: true });
+  fs.writeFileSync(path.join(secondFixtureDir, 'stdin.txt'), 'openspec-diff\n', 'utf8');
+  fs.writeFileSync(path.join(secondFixtureDir, 'stdout.txt'), 'done\n', 'utf8');
+
+  try {
+    const completed = spawnSync('node', [RUN_TEST_PATH, testsDir], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        NODE_NO_WARNINGS: '1',
+        OPENSPEC_DIFF_TEST_CONCURRENCY: '2',
+      },
+    });
+
+    assert.equal(completed.status, 0);
+    assert.equal(completed.stdout, '..\n');
+    assert.equal(completed.stderr, '');
+    assert.equal(fs.existsSync(overlapPath), true);
+  } finally {
+    fs.rmSync(lockPath, { recursive: true, force: true });
+    fs.rmSync(overlapPath, { force: true });
     fs.rmSync(workspaceRoot, { recursive: true, force: true });
   }
 });

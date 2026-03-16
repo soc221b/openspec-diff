@@ -1,15 +1,19 @@
 import fs from "node:fs";
 import path from "node:path";
+import { PassThrough } from "node:stream";
+
+import { checkbox, select } from "@inquirer/prompts";
 
 export const OPENSPEC_DIRECTORY = "openspec";
 export const CHANGES_DIRECTORY = "changes";
 export const SPECS_DIRECTORY = "specs";
 export const SPEC_FILE_NAME = "spec.md";
-const PROMPT_OVERHEAD = 3;
 
 const ERR_NO_CHANGES = "no active changes found";
 const ERR_NO_SELECTION = "no change selected";
 const ERR_NO_SPEC_SELECTION = "no spec selected";
+const CHANGE_PROMPT_MESSAGE = "Select a change to diff";
+const SPEC_PROMPT_MESSAGE = "Select specs to diff";
 
 export type CommandRunner = (
   dir: string,
@@ -24,103 +28,13 @@ interface SpecPair {
   mainPath: string;
 }
 
-export type PromptInput =
-  | { kind: "typed"; text: string }
-  | { kind: "submit" }
-  | { kind: "moveUp" }
-  | { kind: "moveDown" }
-  | { kind: "toggle" }
-  | { kind: "eof" };
-
-export class StreamByteReader {
-  private readonly buffers: Buffer[] = [];
-  private ended = false;
-  private error: Error | undefined;
-  private readonly waiters: Array<{
-    resolve: (value: number | null) => void;
-    reject: (error: Error) => void;
-  }> = [];
-
-  constructor(stream: NodeJS.ReadableStream) {
-    stream.on("data", (chunk) => {
-      this.buffers.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-      this.flushWaiters();
-    });
-    stream.on("end", () => {
-      this.ended = true;
-      this.flushWaiters();
-    });
-    stream.on("error", (error) => {
-      this.error = error instanceof Error ? error : new Error(String(error));
-      this.flushWaiters();
-    });
-
-    if (typeof (stream as { resume?: () => void }).resume === "function") {
-      (stream as { resume: () => void }).resume();
-    }
-  }
-
-  async readByte(): Promise<number | null> {
-    if (this.error) {
-      throw this.error;
-    }
-
-    const chunk = this.buffers[0];
-    if (chunk && chunk.length > 0) {
-      const value = chunk[0];
-      if (chunk.length === 1) {
-        this.buffers.shift();
-      } else {
-        this.buffers[0] = chunk.subarray(1);
-      }
-      return value;
-    }
-
-    if (this.ended) {
-      return null;
-    }
-
-    return await new Promise<number | null>((resolve, reject) => {
-      this.waiters.push({ resolve, reject });
-    });
-  }
-
-  private flushWaiters(): void {
-    while (this.waiters.length > 0) {
-      if (this.error) {
-        this.waiters.shift()?.reject(this.error);
-        continue;
-      }
-
-      const chunk = this.buffers[0];
-      if (chunk && chunk.length > 0) {
-        const waiter = this.waiters.shift();
-        const value = chunk[0];
-        if (chunk.length === 1) {
-          this.buffers.shift();
-        } else {
-          this.buffers[0] = chunk.subarray(1);
-        }
-        waiter?.resolve(value);
-        continue;
-      }
-
-      if (this.ended) {
-        this.waiters.shift()?.resolve(null);
-        continue;
-      }
-
-      break;
-    }
-  }
-}
-
 export async function run(
   stdin: NodeJS.ReadableStream,
   stdout: NodeJS.WritableStream,
   workDir: string,
   changeName: string,
   specName: string,
+  diffToolCommand: string,
   coreDiffExecutable: string,
   runCommand: CommandRunner,
 ): Promise<void> {
@@ -145,6 +59,7 @@ export async function run(
       changes,
       changeName,
     );
+    await flushOutput(stdout);
   } catch (error) {
     if (isMessage(error, ERR_NO_SELECTION)) {
       stdout.write("No change selected. Aborting.\n");
@@ -169,6 +84,7 @@ export async function run(
       specPairs,
       specName,
     );
+    await flushOutput(stdout);
   } catch (error) {
     if (isMessage(error, ERR_NO_SPEC_SELECTION)) {
       return;
@@ -181,12 +97,19 @@ export async function run(
   }
 
   for (const pair of selectedSpecPairs) {
-    stdout.write(`Diffing ${pair.name}\n`);
+    const commandArgs =
+      diffToolCommand.trim() === ""
+        ? [path.relative(repoRoot, pair.mainPath), path.relative(repoRoot, pair.changePath)]
+        : [
+            "--difftool",
+            diffToolCommand,
+            path.relative(repoRoot, pair.mainPath),
+            path.relative(repoRoot, pair.changePath),
+          ];
     await runCommand(
       repoRoot,
       coreDiffExecutable,
-      pair.mainPath,
-      pair.changePath,
+      ...commandArgs,
     );
   }
 }
@@ -249,9 +172,11 @@ async function selectRequestedChange(
     return resolveExactChange(changes, changeName);
   }
 
-  return await withRawMode(stdin, async () =>
+  const selectedChange = await withRawMode(stdin, async () =>
     selectChange(stdin, stdout, changes),
   );
+  stdout.write("\n");
+  return selectedChange;
 }
 
 async function selectChange(
@@ -259,97 +184,59 @@ async function selectChange(
   stdout: NodeJS.WritableStream,
   changes: string[],
 ): Promise<string> {
-  const reader = new StreamByteReader(stdin);
-  let selectedIndex = 0;
-  let typedSelection = "";
-  const rendered = { value: false };
+  const promptInput = createPromptInputStream(stdin);
+  const promptAbort = new AbortController();
+  const handleSigint = () => {
+    promptAbort.abort();
+  };
+  const handleData = (chunk: Buffer | string) => {
+    promptInput.write(chunk);
+  };
+  const handleEnd = () => {
+    promptInput.end();
+  };
+  const handleError = (error: Error) => {
+    promptInput.destroy(error);
+  };
 
-  renderSingleSelectionPrompt(
-    stdout,
-    "Select a change to diff",
-    changes,
-    selectedIndex,
-    "↑↓ navigate • ⏎ select",
-    rendered,
-  );
+  process.on("SIGINT", handleSigint);
+  stdin.on("data", handleData);
+  stdin.once("end", handleEnd);
+  stdin.once("error", handleError);
 
-  while (true) {
-    const input = await readPromptInput(reader);
-
-    switch (input.kind) {
-      case "eof":
-        return resolveSelection(
-          stdout,
-          changes,
-          selectedIndex,
-          typedSelection,
-          true,
-        );
-      case "submit":
-        return resolveSelection(
-          stdout,
-          changes,
-          selectedIndex,
-          typedSelection,
-          false,
-        );
-      case "toggle":
-        typedSelection += " ";
-        break;
-      case "moveUp":
-        if (selectedIndex > 0) {
-          selectedIndex -= 1;
-        }
-        renderSingleSelectionPrompt(
-          stdout,
-          "Select a change to diff",
-          changes,
-          selectedIndex,
-          "↑↓ navigate • ⏎ select",
-          rendered,
-        );
-        break;
-      case "moveDown":
-        if (selectedIndex < changes.length - 1) {
-          selectedIndex += 1;
-        }
-        renderSingleSelectionPrompt(
-          stdout,
-          "Select a change to diff",
-          changes,
-          selectedIndex,
-          "↑↓ navigate • ⏎ select",
-          rendered,
-        );
-        break;
-      case "typed":
-        typedSelection += input.text;
-        break;
-    }
+  if (typeof (stdin as { resume?: () => void }).resume === "function") {
+    (stdin as { resume: () => void }).resume();
   }
-}
 
-function resolveSelection(
-  stdout: NodeJS.WritableStream,
-  changes: string[],
-  selectedIndex: number,
-  rawSelection: string,
-  eof: boolean,
-): string {
-  const selection = rawSelection.trim();
-  if (selection === "") {
-    if (eof) {
+  try {
+    return await select(
+      {
+        message: CHANGE_PROMPT_MESSAGE,
+        choices: changes.map((change) => ({
+          name: change,
+          short: change,
+          value: change,
+        })),
+      },
+      {
+        input: promptInput,
+        output: stdout,
+        signal: promptAbort.signal,
+      },
+    );
+  } catch (error) {
+    if (isInquirerAbort(error)) {
       throw new Error(ERR_NO_SELECTION);
     }
-
-    const selected = changes[selectedIndex];
-    stdout.write(`✔ Select a change to diff ${selected}\n\n`);
-    return selected;
+    throw error;
+  } finally {
+    process.removeListener("SIGINT", handleSigint);
+    stdin.removeListener("data", handleData);
+    stdin.removeListener("end", handleEnd);
+    stdin.removeListener("error", handleError);
+    pauseStream(stdin);
+    promptInput.end();
   }
-
-  const change = resolveExactChange(changes, selection);
-  stdout.write(`✔ Select a change to diff ${change}\n\n`);
-  return change;
 }
 
 function resolveExactChange(changes: string[], rawSelection: string): string {
@@ -381,6 +268,9 @@ async function selectRequestedSpec(
   const selectedSpecs = await withRawMode(stdin, async () =>
     selectSpecs(stdin, stdout, specs),
   );
+  if (selectedSpecs.length > 0) {
+    stdout.write("\n");
+  }
   return filterSpecPairs(specPairs, selectedSpecs);
 }
 
@@ -389,216 +279,92 @@ async function selectSpecs(
   stdout: NodeJS.WritableStream,
   specs: string[],
 ): Promise<string[]> {
-  const reader = new StreamByteReader(stdin);
-  let selectedIndex = 0;
-  let typedSelection = "";
-  const selected = specs.map(() => false);
-  const rendered = { value: false };
+  const promptInput = createPromptInputStream(stdin);
+  const promptAbort = new AbortController();
+  const handleSigint = () => {
+    promptAbort.abort();
+  };
+  const handleData = (chunk: Buffer | string) => {
+    promptInput.write(chunk);
+  };
+  const handleEnd = () => {
+    promptInput.end();
+  };
+  const handleError = (error: Error) => {
+    promptInput.destroy(error);
+  };
+  process.on("SIGINT", handleSigint);
 
-  renderMultiSelectionPrompt(
-    stdout,
-    "Select specs to diff",
-    specs,
-    selected,
-    selectedIndex,
-    "↑↓ navigate • space toggle • ⏎ submit",
-    rendered,
-  );
+  stdin.on("data", handleData);
+  stdin.once("end", handleEnd);
+  stdin.once("error", handleError);
 
-  while (true) {
-    const input = await readPromptInput(reader);
-
-    switch (input.kind) {
-      case "eof":
-        return resolveSpecSelections(
-          stdout,
-          specs,
-          selected,
-          typedSelection,
-          true,
-        );
-      case "submit":
-        return resolveSpecSelections(
-          stdout,
-          specs,
-          selected,
-          typedSelection,
-          false,
-        );
-      case "toggle":
-        selected[selectedIndex] = !selected[selectedIndex];
-        renderMultiSelectionPrompt(
-          stdout,
-          "Select specs to diff",
-          specs,
-          selected,
-          selectedIndex,
-          "↑↓ navigate • space toggle • ⏎ submit",
-          rendered,
-        );
-        break;
-      case "moveUp":
-        if (selectedIndex > 0) {
-          selectedIndex -= 1;
-        }
-        renderMultiSelectionPrompt(
-          stdout,
-          "Select specs to diff",
-          specs,
-          selected,
-          selectedIndex,
-          "↑↓ navigate • space toggle • ⏎ submit",
-          rendered,
-        );
-        break;
-      case "moveDown":
-        if (selectedIndex < specs.length - 1) {
-          selectedIndex += 1;
-        }
-        renderMultiSelectionPrompt(
-          stdout,
-          "Select specs to diff",
-          specs,
-          selected,
-          selectedIndex,
-          "↑↓ navigate • space toggle • ⏎ submit",
-          rendered,
-        );
-        break;
-      case "typed":
-        typedSelection += input.text;
-        break;
-    }
-  }
-}
-
-export async function readPromptInput(
-  reader: Pick<StreamByteReader, "readByte">,
-): Promise<PromptInput> {
-  const input = await reader.readByte();
-  if (input === null) {
-    return { kind: "eof" };
+  if (typeof (stdin as { resume?: () => void }).resume === "function") {
+    (stdin as { resume: () => void }).resume();
   }
 
-  switch (input) {
-    case 13:
-    case 10:
-      return { kind: "submit" };
-    case 32:
-      return { kind: "toggle" };
-    case 0x1b:
-      return await readPromptEscapeSequence(reader, input);
-    default:
-      return { kind: "typed", text: String.fromCharCode(input) };
-  }
-}
-
-async function readPromptEscapeSequence(
-  reader: Pick<StreamByteReader, "readByte">,
-  start: number,
-): Promise<PromptInput> {
-  const next = await reader.readByte();
-  if (next === null) {
-    return { kind: "eof" };
-  }
-  if (next !== 0x5b) {
-    return { kind: "typed", text: String.fromCharCode(start, next) };
-  }
-
-  const direction = await reader.readByte();
-  if (direction === null) {
-    return { kind: "eof" };
-  }
-
-  switch (direction) {
-    case 0x41:
-      return { kind: "moveUp" };
-    case 0x42:
-      return { kind: "moveDown" };
-    default:
-      return {
-        kind: "typed",
-        text: String.fromCharCode(start, next, direction),
-      };
-  }
-}
-
-function renderSingleSelectionPrompt(
-  stdout: NodeJS.WritableStream,
-  question: string,
-  options: string[],
-  selectedIndex: number,
-  hint: string,
-  rendered: { value: boolean },
-): void {
-  beginPromptRender(stdout, options.length, rendered);
-  stdout.write(`? ${question}\n`);
-  for (const [index, option] of options.entries()) {
-    const prefix = index === selectedIndex ? "❯" : " ";
-    stdout.write(`${prefix} ${option}\n`);
-  }
-  endPromptRender(stdout, hint, rendered);
-}
-
-function renderMultiSelectionPrompt(
-  stdout: NodeJS.WritableStream,
-  question: string,
-  options: string[],
-  selected: boolean[],
-  selectedIndex: number,
-  hint: string,
-  rendered: { value: boolean },
-): void {
-  beginPromptRender(stdout, options.length, rendered);
-  stdout.write(`? ${question}\n`);
-  for (const [index, option] of options.entries()) {
-    const prefix = index === selectedIndex ? "❯" : " ";
-    const marker = selected[index] ? "◉" : "◯";
-    stdout.write(`${prefix} ${marker} ${option}\n`);
-  }
-  endPromptRender(stdout, hint, rendered);
-}
-
-function beginPromptRender(
-  stdout: NodeJS.WritableStream,
-  optionCount: number,
-  rendered: { value: boolean },
-): void {
-  if (rendered.value) {
-    stdout.write(`\x1b[${optionCount + PROMPT_OVERHEAD}A\x1b[J`);
-  }
-}
-
-function endPromptRender(
-  stdout: NodeJS.WritableStream,
-  hint: string,
-  rendered: { value: boolean },
-): void {
-  stdout.write("\n");
-  stdout.write(`${hint}\n`);
-  rendered.value = true;
-}
-
-function resolveSpecSelections(
-  stdout: NodeJS.WritableStream,
-  specs: string[],
-  selected: boolean[],
-  rawSelection: string,
-  _eof: boolean,
-): string[] {
-  const selection = parseSpecSelections(rawSelection);
-  if (selection.length === 0) {
-    const selectedSpecs = selectedSpecNames(specs, selected);
-    if (selectedSpecs.length === 0) {
+  try {
+    return await checkbox(
+      {
+        message: SPEC_PROMPT_MESSAGE,
+        choices: specs.map((spec) => ({
+          name: spec,
+          short: spec,
+          value: spec,
+        })),
+      },
+      {
+        input: promptInput,
+        output: stdout,
+        signal: promptAbort.signal,
+      },
+    );
+  } catch (error) {
+    if (isInquirerAbort(error)) {
       return [];
     }
-    stdout.write(`✔ Select specs to diff ${selectedSpecs.join(", ")}\n\n`);
-    return selectedSpecs;
+    throw error;
+  } finally {
+    process.removeListener("SIGINT", handleSigint);
+    stdin.removeListener("data", handleData);
+    stdin.removeListener("end", handleEnd);
+    stdin.removeListener("error", handleError);
+    pauseStream(stdin);
+    promptInput.end();
   }
+}
 
-  const selectedSpecs = validateSpecSelections(specs, selection);
-  stdout.write(`✔ Select specs to diff ${selectedSpecs.join(", ")}\n\n`);
-  return selectedSpecs;
+function createPromptInputStream(stdin: NodeJS.ReadableStream): PassThrough {
+  const rawInput = new PassThrough();
+  (
+    rawInput as PassThrough & {
+      isTTY?: boolean;
+    }
+  ).isTTY = Boolean(
+    (stdin as NodeJS.ReadableStream & { isTTY?: boolean }).isTTY,
+  );
+  return new Proxy(rawInput, {
+    get(target, property) {
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+    has(target, property) {
+      if (property === "readableFlowing") {
+        return false;
+      }
+      return property in target;
+    },
+    set(target, property, value) {
+      return Reflect.set(target, property, value, target);
+    },
+  }) as PassThrough;
+}
+
+function isInquirerAbort(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.name === "AbortPromptError" || error.name === "ExitPromptError")
+  );
 }
 
 function filterSpecPairs(
@@ -733,12 +499,26 @@ function validateSpecSelections(
   return selections;
 }
 
-function selectedSpecNames(specs: string[], selected: boolean[]): string[] {
-  return specs.filter((_, index) => selected[index]);
-}
-
 function specSelectors(specPairs: SpecPair[]): string[] {
   return specPairs.map((pair) => pair.selector);
+}
+
+function pauseStream(stream: NodeJS.ReadableStream): void {
+  if (typeof (stream as { pause?: () => void }).pause === "function") {
+    (stream as { pause: () => void }).pause();
+  }
+}
+
+function flushOutput(stdout: NodeJS.WritableStream): Promise<void> {
+  return new Promise((resolve, reject) => {
+    stdout.write("", (error?: Error | null) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
 }
 
 async function withRawMode<T>(

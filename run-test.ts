@@ -12,6 +12,9 @@ const MAX_OUTPUT_SETTLE_MS = 1000;
 const PROCESS_EXIT_TIMEOUT_MS = 5000;
 const SIGNAL_EXIT_CODE_OFFSET = 128;
 const TESTS_DIRECTORY_NAME = 'tests';
+const FIXTURE_CONCURRENCY_ENV = 'OPENSPEC_DIFF_TEST_CONCURRENCY';
+const DEFAULT_FIXTURE_CONCURRENCY =
+  typeof os.availableParallelism === 'function' ? os.availableParallelism() : os.cpus().length;
 type FixtureFailure = { fixtureDir: string; message: string };
 type FixtureInstruction = { lineNumber: number; value: string };
 type CommandRunnerInput = { stdin: string; path: string };
@@ -46,6 +49,7 @@ type OutputPaths = {
   stderrPath: string;
   exitCodePath: string;
   commandPath: string;
+  environment: NodeJS.ProcessEnv;
 };
 
 const PACKAGE_CONTEXTS: Record<string, PackageContext> = {
@@ -64,40 +68,13 @@ const PACKAGE_CONTEXTS: Record<string, PackageContext> = {
 
 async function main(argv = process.argv) {
   const testsPath = getTestsPath(argv);
-  ensurePathExists(testsPath);
-  const fixtureFailures: FixtureFailure[] = [];
-
-  for (const fixtureDir of getFixtureDirectories(testsPath)) {
-    let actualPath: string | null = null;
-
-    try {
-      const result = await runFixtureCommand({
-        stdin: fs.readFileSync(path.join(fixtureDir, 'stdin.txt'), 'utf8'),
-        path: fixtureDir,
-      });
-      actualPath = result.path;
-      const assertion = assertFixtureResult({
-        expectedPath: fixtureDir,
-        actualPath,
-      });
-
-      if (assertion.exitCode !== 0) {
-        throw new Error(`Fixture assertion failed for ${fixtureDir}`);
-      }
-
-      process.stdout.write('.');
-    } catch (error) {
-      process.stdout.write('F');
-      fixtureFailures.push({
-        fixtureDir,
-        message: error instanceof Error ? error.message : String(error),
-      });
-    } finally {
-      if (actualPath) {
-        fs.rmSync(actualPath, { recursive: true, force: true });
-      }
-    }
-  }
+  const fixtureFailures = await runFixtureSuite({
+    workspaceRoot: getWorkspaceRoot(import.meta.url),
+    testsPath,
+    onFixtureComplete: (failure) => {
+      process.stdout.write(failure ? 'F' : '.');
+    },
+  });
 
   process.stdout.write('\n');
 
@@ -113,25 +90,20 @@ async function main(argv = process.argv) {
 async function runFixtureSuite({
   workspaceRoot,
   testsPath,
+  onFixtureComplete = () => {},
 }: {
   workspaceRoot: string;
   testsPath: string;
+  onFixtureComplete?: (failure: FixtureFailure | null) => void;
 }): Promise<FixtureFailure[]> {
   ensurePathExists(testsPath);
 
   const context = createContext(workspaceRoot, testsPath);
-  const fixtureFailures: FixtureFailure[] = [];
-
-  for (const fixtureDir of getFixtureDirectories(testsPath)) {
-    const failure = await executeFixture(context, fixtureDir);
-    process.stdout.write(failure ? 'x' : '.');
-
-    if (failure) {
-      fixtureFailures.push(failure);
-    }
-  }
-
-  return fixtureFailures;
+  return runFixturesInParallel({
+    fixtureDirs: getFixtureDirectories(testsPath),
+    onFixtureComplete,
+    execute: (fixtureDir) => executeFixture(context, fixtureDir),
+  });
 }
 
 async function executeFixture(context: FixtureContext, fixtureDir: string): Promise<FixtureFailure | null> {
@@ -160,6 +132,76 @@ async function executeFixture(context: FixtureContext, fixtureDir: string): Prom
     const message = error instanceof Error ? error.message : String(error);
     return { fixtureDir, message };
   }
+}
+
+async function runFixturesInParallel({
+  fixtureDirs,
+  onFixtureComplete,
+  execute,
+}: {
+  fixtureDirs: string[];
+  onFixtureComplete: (failure: FixtureFailure | null) => void;
+  execute: (fixtureDir: string) => Promise<FixtureFailure | null>;
+}): Promise<FixtureFailure[]> {
+  if (fixtureDirs.length === 0) {
+    return [];
+  }
+
+  const failures: Array<FixtureFailure | null | undefined> = Array.from({ length: fixtureDirs.length });
+  const progressState = { nextIndexToReport: 0 };
+  let nextIndexToExecute = 0;
+
+  const runWorker = async () => {
+    while (nextIndexToExecute < fixtureDirs.length) {
+      const fixtureIndex = nextIndexToExecute;
+      nextIndexToExecute += 1;
+      failures[fixtureIndex] = await execute(fixtureDirs[fixtureIndex]);
+      flushCompletedFixtures(failures, progressState, onFixtureComplete);
+    }
+  };
+
+  const concurrency = getFixtureConcurrency(fixtureDirs.length);
+  await Promise.all(Array.from({ length: concurrency }, () => runWorker()));
+  return failures.filter((failure): failure is FixtureFailure => failure !== null && failure !== undefined);
+}
+
+function flushCompletedFixtures(
+  failures: Array<FixtureFailure | null | undefined>,
+  progressState: { nextIndexToReport: number },
+  onFixtureComplete: (failure: FixtureFailure | null) => void
+) {
+  while (progressState.nextIndexToReport < failures.length) {
+    const failure = failures[progressState.nextIndexToReport];
+
+    if (failure === undefined) {
+      return;
+    }
+
+    onFixtureComplete(failure);
+    progressState.nextIndexToReport += 1;
+  }
+}
+
+function getFixtureConcurrency(fixtureCount: number) {
+  const rawValue = process.env[FIXTURE_CONCURRENCY_ENV];
+  const requestedConcurrency =
+    rawValue === undefined ? DEFAULT_FIXTURE_CONCURRENCY : parseFixtureConcurrency(rawValue);
+
+  return Math.max(1, Math.min(fixtureCount, requestedConcurrency));
+}
+
+function parseFixtureConcurrency(value: string) {
+  if (!/^[1-9][0-9]*$/.test(value)) {
+    throw new Error(`Invalid ${FIXTURE_CONCURRENCY_ENV}: expected a positive integer, received ${value}`);
+  }
+
+  const parsed = Number.parseInt(value, 10);
+
+  if (!Number.isSafeInteger(parsed)) {
+    throw new Error(`Invalid ${FIXTURE_CONCURRENCY_ENV}: expected a positive integer, received ${value}`);
+  }
+
+  return parsed;
 }
 
 export async function runFixtureCommand({
@@ -197,7 +239,11 @@ async function runFixtureCommandInWorkspace({
       context.commandName,
       context.interactive
     );
-    const result = await runPlannedFixtureCommand(commandPlan, outputPaths.workspaceDir);
+    const result = await runPlannedFixtureCommand(
+      commandPlan,
+      outputPaths.workspaceDir,
+      outputPaths.environment
+    );
     writeCommandOutputs(outputPaths, result);
     keepTempDir = true;
 
@@ -211,12 +257,16 @@ async function runFixtureCommandInWorkspace({
   }
 }
 
-function runPlannedFixtureCommand(commandPlan: CommandPlan, workingDirectory: string): Promise<DetailedCommandResult> {
+function runPlannedFixtureCommand(
+  commandPlan: CommandPlan,
+  workingDirectory: string,
+  environment: NodeJS.ProcessEnv
+): Promise<DetailedCommandResult> {
   if (!commandPlan.interactive) {
-    return Promise.resolve(runCommand(commandPlan.command, workingDirectory));
+    return Promise.resolve(runCommand(commandPlan.command, workingDirectory, environment));
   }
 
-  return runInteractiveFixtureCommand(commandPlan, workingDirectory);
+  return runInteractiveFixtureCommand(commandPlan, workingDirectory, environment);
 }
 
 export function assertFixtureResult({
@@ -265,10 +315,15 @@ export function assertFixtureResult({
   return { exitCode: 0 };
 }
 
-function runCommand(commands: string[], workingDirectory: string): DetailedCommandResult {
+function runCommand(
+  commands: string[],
+  workingDirectory: string,
+  environment: NodeJS.ProcessEnv
+): DetailedCommandResult {
   const completed = spawnSync(commands[0], commands.slice(1), {
     cwd: workingDirectory,
     encoding: 'utf8',
+    env: environment,
   });
 
   return {
@@ -283,18 +338,20 @@ function runCommand(commands: string[], workingDirectory: string): DetailedComma
 
 async function runInteractiveFixtureCommand(
   commandPlan: CommandPlan,
-  workingDirectory: string
+  workingDirectory: string,
+  environment: NodeJS.ProcessEnv
 ): Promise<DetailedCommandResult> {
-  const detailedResult = await runInteractiveCommand(commandPlan, workingDirectory);
+  const detailedResult = await runInteractiveCommand(commandPlan, workingDirectory, environment);
   assertProcessDidExit(commandPlan, detailedResult);
   return detailedResult;
 }
 
 async function runInteractiveCommand(
   commandPlan: CommandPlan,
-  workingDirectory: string
+  workingDirectory: string,
+  environment: NodeJS.ProcessEnv
 ): Promise<DetailedCommandResult> {
-  const child = spawnInteractiveProcess(commandPlan, workingDirectory);
+  const child = spawnInteractiveProcess(commandPlan, workingDirectory, environment);
   const closePromise = waitForChildClose(child);
   const output = collectChildOutput(child);
   const aborted = await applyInteractiveInstructions(child, commandPlan, output);
@@ -341,12 +398,15 @@ function createContext(workspaceRoot: string, testsPath: string): FixtureContext
 function prepareFixtureWorkspace(context: FixtureContext, fixtureDir: string, tempDir: string): OutputPaths {
   const actualDir = tempDir;
   const workspaceDir = path.join(tempDir, 'workspace');
+  const homeDir = path.join(tempDir, 'home');
   const tempOpenSpecDir = path.join(workspaceDir, 'openspec');
   const stdoutPath = path.join(actualDir, 'stdout.txt');
   const stderrPath = path.join(actualDir, 'stderr.txt');
   const exitCodePath = path.join(actualDir, 'exit-code.txt');
 
   fs.cpSync(path.join(fixtureDir, 'openspec'), tempOpenSpecDir, { recursive: true });
+  fs.mkdirSync(homeDir, { recursive: true });
+  installFixtureConfig(fixtureDir, homeDir);
   initializeGitWorkspace(workspaceDir);
 
   return {
@@ -356,13 +416,19 @@ function prepareFixtureWorkspace(context: FixtureContext, fixtureDir: string, te
     stderrPath,
     exitCodePath,
     commandPath: getCommandPath(context),
+    environment: createFixtureEnvironment(homeDir),
   };
 }
 
-function spawnInteractiveProcess(commandPlan: CommandPlan, workspaceDir: string) {
+function spawnInteractiveProcess(
+  commandPlan: CommandPlan,
+  workspaceDir: string,
+  environment: NodeJS.ProcessEnv
+) {
   return spawn(commandPlan.command[0], commandPlan.command.slice(1), {
     cwd: workspaceDir,
     detached: true,
+    env: environment,
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 }
@@ -468,6 +534,26 @@ function ensureFixtureInputs(fixtureDir: string) {
   if (!fs.existsSync(stdinPath)) {
     throw new Error(`Missing required stdin fixture: ${stdinPath}`);
   }
+}
+
+function installFixtureConfig(fixtureDir: string, homeDir: string) {
+  const configPath = path.join(fixtureDir, 'config.json');
+
+  if (!fs.existsSync(configPath)) {
+    return;
+  }
+
+  const targetPath = path.join(homeDir, '.config', 'openspec-diff', 'config.json');
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  fs.copyFileSync(configPath, targetPath);
+}
+
+function createFixtureEnvironment(homeDir: string): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    HOME: homeDir,
+    USERPROFILE: homeDir,
+  };
 }
 
 function initializeGitWorkspace(workspaceDir: string) {
@@ -690,7 +776,7 @@ function renderTerminalOutput(raw: string) {
     lines.pop();
   }
 
-  return lines.join('\n');
+  return lines.map((line) => line.replace(/[ \t]+$/g, '')).join('\n');
 }
 
 function matchControlSequence(raw: string, index: number) {

@@ -1,5 +1,5 @@
 ? Select specs to diff
-❯ ◯ auth
-  ◯ transaction
+❯◯ auth
+ ◯ transaction
 
-↑↓ navigate • space toggle • ⏎ submit
+↑↓ navigate • space select • a all • i invert • ⏎ submit

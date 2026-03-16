@@ -1,0 +1,3 @@
+{
+  "difftool": "diff -u --label main --label change \"$LOCAL\" \"$REMOTE\""
+}

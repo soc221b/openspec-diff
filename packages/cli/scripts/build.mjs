@@ -17,6 +17,7 @@ await build({
   entryPoints: ["src/cli.ts"],
   format: "esm",
   outfile: cliOutFile,
+  packages: "external",
   platform: "node",
   sourcemap: true,
   target: "node22",
