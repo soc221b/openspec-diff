@@ -9,14 +9,14 @@
       "outputs": ["{workspaceRoot}/dist/target/core"],
       "options": {
         "cwd": "packages/core",
-        "command": "cargo build --target-dir ../../dist/target/core"
+        "command": "npm run build"
       }
     },
     "format": {
       "executor": "nx:run-commands",
       "options": {
         "cwd": "packages/core",
-        "command": "cargo fmt --check"
+        "command": "npm run format"
       }
     },
     "test": {
@@ -27,8 +27,8 @@
         "parallel": false,
         "commands": [
           "npm install -g @fission-ai/openspec@latest",
-          "cargo build --target-dir ../../dist/target/core",
-          "node ../../run-test.ts ./tests"
+          "npm run build",
+          "npm run test"
         ]
       }
     }
