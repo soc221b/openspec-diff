@@ -1,3 +1,3 @@
-# Auth Specification - Changes
+# Specification
 ## REMOVED Requirements
 ### Requirement: Single sign-on

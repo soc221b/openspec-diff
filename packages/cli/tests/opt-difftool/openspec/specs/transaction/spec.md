@@ -1,14 +1,12 @@
-# Transaction Specification
+# Specification
 ## Purpose
-Lorem ipsum
+_
 ## Requirements
 ### Requirement: Transaction history
-Lorem ipsum SHALL dolor sit amet
-#### Scenario: Lorem ipsum
-- **WHEN** lorem ipsum
-- **THEN** lorem ipsum
+_ SHALL _
+#### Scenario:
+- **THEN**
 ### Requirement: Payment details
-Lorem ipsum SHALL dolor sit amet
-#### Scenario: Lorem ipsum
-- **WHEN** lorem ipsum
-- **THEN** lorem ipsum
+_ SHALL _
+#### Scenario:
+- **THEN**

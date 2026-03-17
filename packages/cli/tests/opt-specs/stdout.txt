@@ -1,12 +1,10 @@
-5,9d4
+5,8d4
 < ### Requirement: Single sign-on
-< Lorem ipsum SHALL dolor sit amet
-< #### Scenario: Lorem ipsum
-< - **WHEN** lorem ipsum
-< - **THEN** lorem ipsum
-5,9d4
+< _ SHALL _
+< #### Scenario:
+< - **THEN**
+5,8d4
 < ### Requirement: Transaction history
-< Lorem ipsum SHALL dolor sit amet
-< #### Scenario: Lorem ipsum
-< - **WHEN** lorem ipsum
-< - **THEN** lorem ipsum
+< _ SHALL _
+< #### Scenario:
+< - **THEN**

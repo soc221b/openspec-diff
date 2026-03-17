@@ -1,15 +1,13 @@
-# Auth Specification
+# Specification
 ## Purpose
-Lorem ipsum
+_
 ## Requirements
 ### Requirement: Single sign-on
-Lorem ipsum SHALL dolor sit amet
-#### Scenario: Lorem ipsum
-- **WHEN** lorem ipsum
-- **THEN** lorem ipsum
+_ SHALL _
+#### Scenario:
+- **THEN**
 ### Requirement: Password sign-in
-Lorem ipsum SHALL dolor sit amet
-#### Scenario: Lorem ipsum
-- **WHEN** lorem ipsum
-- **THEN** lorem ipsum
+_ SHALL _
+#### Scenario:
+- **THEN**
 

@@ -1,15 +1,13 @@
-# Shipping Specification
+# Specification
 ## Purpose
-Lorem ipsum
+_
 ## Requirements
 ### Requirement: Order tracking
-Lorem ipsum SHALL dolor sit amet
-#### Scenario: Lorem ipsum
-- **WHEN** lorem ipsum
-- **THEN** lorem ipsum
+_ SHALL _
+#### Scenario:
+- **THEN**
 ### Requirement: Delivery updates
-Lorem ipsum SHALL dolor sit amet
-#### Scenario: Lorem ipsum
-- **WHEN** lorem ipsum
-- **THEN** lorem ipsum
+_ SHALL _
+#### Scenario:
+- **THEN**
 
