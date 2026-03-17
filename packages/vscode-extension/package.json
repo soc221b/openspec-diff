@@ -1,16 +1,21 @@
 {
-  "name": "@openspec-diff/vscode-extension",
+  "name": "openspec-diff",
+  "publisher": "openspec-diff",
   "version": "1.0.0",
   "displayName": "OpenSpec Diff",
   "description": "Minimal VSCode extension scaffold for openspec-diff.",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/soc221b/openspec-diff",
+    "directory": "packages/vscode-extension"
+  },
   "main": "./dist/extension.js",
   "type": "module",
   "engines": {
     "vscode": "^1.110.0"
   },
   "activationEvents": [
-    "onCommand:openspecDiff.openDiff",
     "onLanguage:markdown"
   ],
   "contributes": {
@@ -19,7 +24,22 @@
         "command": "openspecDiff.openDiff",
         "title": "OpenSpec Diff"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "OpenSpec Diff",
+      "properties": {
+        "openspecDiff.openspecBin": {
+          "type": "string",
+          "default": "openspec",
+          "description": "Path to the openspec binary used to preprocess delta specs."
+        },
+        "openspecDiff.difftoolBin": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the openspec-difftool binary. Leave empty to use the bundled binary."
+        }
+      }
+    }
   },
   "scripts": {
     "build": "tsc --noEmit && node ./scripts/build.mjs",

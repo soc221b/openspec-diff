@@ -7,9 +7,11 @@ import test from "node:test";
 import {
   archiveOutputAbortedWithoutWriting,
   archiveOutputDetails,
+  cleanupTemporaryPaths,
   defaultConfigPath,
   loadConfiguredDiffToolCommand,
   normalizeDiffExitCode,
+  prepareDiffInputsForExternal,
   resolveConfiguredDiffToolCommand,
   resolveDiffCommand,
   splitCommand,
@@ -137,6 +139,70 @@ test("loadConfiguredDiffToolCommand rejects non-string difftool values", () => {
       () => loadConfiguredDiffToolCommand(configPath),
       /"difftool" must be a string/,
     );
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("prepareDiffInputsForExternal returns original paths for non-delta specs", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openspec-diff-prepare-"));
+
+  try {
+    const mainSpecDir = path.join(tempDir, "openspec", "specs", "auth");
+    const changeSpecDir = path.join(
+      tempDir,
+      "openspec",
+      "changes",
+      "test-change",
+      "specs",
+      "auth",
+    );
+    fs.mkdirSync(mainSpecDir, { recursive: true });
+    fs.mkdirSync(changeSpecDir, { recursive: true });
+    fs.writeFileSync(path.join(mainSpecDir, "spec.md"), "# Main spec\n");
+    fs.writeFileSync(path.join(changeSpecDir, "spec.md"), "# Change spec\n");
+
+    const result = prepareDiffInputsForExternal(
+      path.join(mainSpecDir, "spec.md"),
+      path.join(changeSpecDir, "spec.md"),
+      "openspec",
+    );
+
+    assert.equal(result.left, path.join(mainSpecDir, "spec.md"));
+    assert.equal(result.right, path.join(changeSpecDir, "spec.md"));
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("prepareDiffInputsForExternal creates placeholder for missing main spec", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openspec-diff-prepare-"));
+
+  try {
+    const changeSpecDir = path.join(
+      tempDir,
+      "openspec",
+      "changes",
+      "test-change",
+      "specs",
+      "auth",
+    );
+    fs.mkdirSync(changeSpecDir, { recursive: true });
+    fs.writeFileSync(path.join(changeSpecDir, "spec.md"), "# Change spec\n");
+
+    const missingMainSpec = path.join(tempDir, "openspec", "specs", "auth", "spec.md");
+    const result = prepareDiffInputsForExternal(
+      missingMainSpec,
+      path.join(changeSpecDir, "spec.md"),
+      "openspec",
+    );
+
+    assert.notEqual(result.left, missingMainSpec);
+    assert.equal(fs.existsSync(result.left), true);
+    assert.equal(fs.readFileSync(result.left, "utf8"), "");
+    assert.equal(result.right, path.join(changeSpecDir, "spec.md"));
+
+    cleanupTemporaryPaths([path.dirname(result.left)]);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

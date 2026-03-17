@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -10,189 +10,113 @@ import {
   type ChangeSpecContext,
   writeArchiveWorkspaceFiles,
 } from "../../core/ts/change-spec.ts";
-const ABORTED_ARCHIVE_MARKER = "Aborted. No files were changed.";
 
-export const DIFF_SCHEME = "openspec-diff";
 export { getChangeSpecContext, looksLikeDeltaSpec };
 
-export interface DiffSnapshot {
-  title: string;
-  mainContent: string;
-  changeContent: string;
-  context: ChangeSpecContext;
-}
+const PREPARE_TIMEOUT_MS = 10_000;
 
-export interface ArchiveRunnerInput {
-  tempRoot: string;
-  changeName: string;
-  changeSpecPath: string;
-  synthesizedSpecPath: string;
-}
-
-export interface ArchiveRunnerResult {
-  stdout: string;
-  stderr: string;
-}
-
-export type ArchiveRunner = (
-  input: ArchiveRunnerInput,
-) => Promise<ArchiveRunnerResult>;
-
-export interface LoadDiffSnapshotOptions {
-  changeSpecContent?: string;
-  mainSpecContent?: string;
-  archiveRunner?: ArchiveRunner;
+export interface PreparedDiff {
+  left: string;
+  right: string;
 }
 
 export function isChangeSpecPath(specPath: string): boolean {
   return getChangeSpecContext(specPath) !== undefined;
 }
 
-export function createDiffDocumentUri(
-  sourceUri: string,
-  side: "main" | "change",
-): string {
-  const params = new URLSearchParams({ source: sourceUri, side });
-  return `${DIFF_SCHEME}:/${side}/spec.md?${params.toString()}`;
-}
-
-export async function loadDiffSnapshot(
-  changeSpecPath: string,
-  options: LoadDiffSnapshotOptions = {},
-): Promise<DiffSnapshot> {
-  const context = getChangeSpecContext(changeSpecPath);
-  if (!context) {
-    throw new Error("Diff is only available for OpenSpec change spec files.");
-  }
-
-  const mainContent =
-    options.mainSpecContent ?? (await readTextIfExists(context.mainSpecPath));
-  const changeSpecContent =
-    options.changeSpecContent ??
-    (await readFile(context.changeSpecPath, "utf8"));
-
-  if (!looksLikeDeltaSpec(changeSpecContent)) {
-    return {
-      title: diffTitle(context),
-      mainContent,
-      changeContent: changeSpecContent,
-      context,
-    };
-  }
-
-  const changeContent = await archiveChangeSpec(
-    context,
-    changeSpecContent,
-    mainContent,
-    options.archiveRunner ?? runOpenSpecArchive,
-  );
-
-  return {
-    title: diffTitle(context),
-    mainContent,
-    changeContent,
-    context,
-  };
-}
-
-async function archiveChangeSpec(
-  context: ChangeSpecContext,
-  changeSpecContent: string,
-  mainContent: string,
-  archiveRunner: ArchiveRunner,
-): Promise<string> {
-  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "openspec-diff-"));
-  const synthesizedSpecPath = getSynthesizedSpecPath(tempRoot, context);
-
-  try {
-    await writeArchiveWorkspaceFiles({
-      tempRoot,
-      context,
-      changeSpecContent,
-      mainContent,
-    });
-    const result = await archiveRunner({
-      tempRoot,
-      changeName: context.changeName,
-      changeSpecPath: context.changeSpecPath,
-      synthesizedSpecPath,
-    });
-    validateArchiveResult(context.changeSpecPath, result);
-    try {
-      return await readFile(synthesizedSpecPath, "utf8");
-    } catch (error) {
-      if (isMissingFileError(error)) {
-        throw new Error(
-          `failed to preprocess delta spec ${context.changeSpecPath}: archive did not produce ${synthesizedSpecPath}`,
-        );
-      }
-      throw error;
-    }
-  } finally {
-    await rm(tempRoot, { recursive: true, force: true });
-  }
-}
-
-function validateArchiveResult(
-  changeSpecPath: string,
-  result: ArchiveRunnerResult,
-): void {
-  const detail = result.stderr || result.stdout;
-  if (detail.includes(ABORTED_ARCHIVE_MARKER)) {
-    throw new Error(
-      `failed to preprocess delta spec ${changeSpecPath}: openspec archive aborted: no files were changed`,
-    );
-  }
-}
-
-async function readTextIfExists(filePath: string): Promise<string> {
-  try {
-    return await readFile(filePath, "utf8");
-  } catch (error) {
-    if (isMissingFileError(error)) {
-      return "";
-    }
-    throw error;
-  }
-}
-
-async function runOpenSpecArchive(
-  input: ArchiveRunnerInput,
-): Promise<ArchiveRunnerResult> {
-  return await new Promise<ArchiveRunnerResult>((resolve, reject) => {
+export async function prepareDiff(input: {
+  difftoolBin: string;
+  openspecBin: string;
+  mainSpecPath: string;
+  changeSpecPath: string;
+}): Promise<PreparedDiff> {
+  return await new Promise<PreparedDiff>((resolve, reject) => {
     execFile(
-      "openspec",
-      ["archive", input.changeName, "--yes"],
-      { cwd: input.tempRoot },
+      input.difftoolBin,
+      ["--prepare-only", input.mainSpecPath, input.changeSpecPath],
+      {
+        env: {
+          ...process.env,
+          OPENSPEC_DIFF_OPENSPEC_BIN: input.openspecBin,
+        },
+        timeout: PREPARE_TIMEOUT_MS,
+      },
       (error, stdout, stderr) => {
-        const result = {
-          stdout: stdout.trim(),
-          stderr: stderr.trim(),
-        };
-
-        if (!error) {
-          resolve(result);
+        if (error) {
+          const message =
+            stderr.trim() ||
+            (isMissingFileError(error)
+              ? "openspec-difftool binary not found"
+              : String(error.message || error));
+          reject(new Error(message));
           return;
         }
 
-        const message =
-          result.stderr ||
-          result.stdout ||
-          (isMissingFileError(error)
-            ? "openspec command not found"
-            : String(error.message || error));
-        reject(
-          new Error(
-            `failed to preprocess delta spec ${input.changeSpecPath}: ${message}`,
-          ),
-        );
+        try {
+          const result = JSON.parse(stdout.trim()) as PreparedDiff;
+          resolve(result);
+        } catch {
+          reject(
+            new Error(`failed to parse openspec-difftool output: ${stdout}`),
+          );
+        }
       },
     );
   });
 }
 
-function diffTitle(context: ChangeSpecContext): string {
-  return `OpenSpec Diff: ${context.changeName} — ${context.relativeSpecPath}`;
+export interface BufferWorkspace {
+  tempRoot: string;
+  mainSpecPath: string;
+  changeSpecPath: string;
+}
+
+export async function writeBufferWorkspace(input: {
+  context: ChangeSpecContext;
+  changeSpecContent: string;
+  mainSpecContent: string;
+}): Promise<BufferWorkspace> {
+  const tempRoot = await mkdtemp(
+    path.join(os.tmpdir(), "openspec-diff-buffer-"),
+  );
+
+  await writeArchiveWorkspaceFiles({
+    tempRoot,
+    context: input.context,
+    changeSpecContent: input.changeSpecContent,
+    mainContent: input.mainSpecContent,
+  });
+
+  const mainSpecPath = getSynthesizedSpecPath(tempRoot, input.context);
+  const changeSpecPath = path.join(
+    tempRoot,
+    "openspec",
+    "changes",
+    input.context.changeName,
+    "specs",
+    input.context.relativeSpecPath,
+  );
+
+  return { tempRoot, mainSpecPath, changeSpecPath };
+}
+
+export async function readSynthesizedContent(
+  prepared: PreparedDiff,
+): Promise<string> {
+  return await readFile(prepared.right, "utf8");
+}
+
+export async function writeManagedTempFile(
+  filePath: string,
+  content: string,
+): Promise<void> {
+  await writeFile(filePath, content, "utf8");
+}
+
+export async function cleanupPaths(paths: string[]): Promise<void> {
+  for (const p of paths) {
+    await rm(p, { recursive: true, force: true });
+  }
 }
 
 function isMissingFileError(error: unknown): error is NodeJS.ErrnoException {

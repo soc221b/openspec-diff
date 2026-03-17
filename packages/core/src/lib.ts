@@ -270,6 +270,11 @@ export function splitCommand(command: string): string[] {
   return tokens;
 }
 
+export interface PreparedDiffResult {
+  left: string;
+  right: string;
+}
+
 interface PreparedDiff {
   left: string;
   right: string;
@@ -288,6 +293,15 @@ function prepareDiffInputs(
     right: prepareDiffInput(uri2, openspecCommand, cleanupPaths),
     cleanupPaths,
   };
+}
+
+export function prepareDiffInputsForExternal(
+  uri1: string,
+  uri2: string,
+  openspecCommand: string,
+): PreparedDiffResult {
+  const prepared = prepareDiffInputs(uri1, uri2, openspecCommand);
+  return { left: prepared.left, right: prepared.right };
 }
 
 function prepareDiffInput(
@@ -528,7 +542,7 @@ function createTempDirectory(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), `${prefix}-`));
 }
 
-function cleanupTemporaryPaths(cleanupPaths: string[]): void {
+export function cleanupTemporaryPaths(cleanupPaths: string[]): void {
   for (const cleanupPath of [...cleanupPaths].reverse()) {
     fs.rmSync(cleanupPath, { recursive: true, force: true });
   }

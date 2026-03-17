@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import {
-  createDiffDocumentUri,
-  loadDiffSnapshot,
+  isChangeSpecPath,
+  writeBufferWorkspace,
 } from "../src/change-spec-diff.ts";
 import {
   getChangeSpecContext,
@@ -37,6 +37,20 @@ test("getChangeSpecContext resolves change and main spec paths", () => {
 test("looksLikeDeltaSpec detects OpenSpec delta markers", () => {
   assert.equal(looksLikeDeltaSpec("## MODIFIED Requirements\n"), true);
   assert.equal(looksLikeDeltaSpec("# Plain spec\n"), false);
+});
+
+test("isChangeSpecPath returns true for change spec paths", () => {
+  const specPath = path.join(
+    "/repo",
+    "openspec",
+    "changes",
+    "test",
+    "specs",
+    "auth",
+    "spec.md",
+  );
+  assert.equal(isChangeSpecPath(specPath), true);
+  assert.equal(isChangeSpecPath("/repo/openspec/specs/auth/spec.md"), false);
 });
 
 test("writeArchiveWorkspaceFiles creates the temporary archive workspace", async () => {
@@ -98,183 +112,61 @@ test("writeArchiveWorkspaceFiles creates the temporary archive workspace", async
   }
 });
 
-test("createDiffDocumentUri encodes the source document and side", () => {
-  const source = "file:///repo/openspec/changes/test/specs/auth/spec.md";
-  const uri = createDiffDocumentUri(source, "change");
-  const parsed = new URL(uri);
+test("writeBufferWorkspace creates workspace with buffer content and correct paths", async () => {
+  const context = {
+    repoRoot: "/repo",
+    changeName: "single-sign-on",
+    relativeSpecPath: path.join("auth", "spec.md"),
+    changeSpecPath: "/repo/openspec/changes/single-sign-on/specs/auth/spec.md",
+    mainSpecPath: "/repo/openspec/specs/auth/spec.md",
+  };
 
-  assert.equal(parsed.protocol, "openspec-diff:");
-  assert.equal(parsed.searchParams.get("source"), source);
-  assert.equal(parsed.searchParams.get("side"), "change");
-});
-
-test("loadDiffSnapshot uses unsaved change content for non-delta specs", async () => {
-  const repoRoot = await createTempRepo();
-  const mainSpecPath = path.join(
-    repoRoot,
-    "openspec",
-    "specs",
-    "auth",
-    "spec.md",
-  );
-  const changeSpecPath = path.join(
-    repoRoot,
-    "openspec",
-    "changes",
-    "single-sign-on",
-    "specs",
-    "auth",
-    "spec.md",
-  );
-  await writeFile(mainSpecPath, "# Main spec\n", "utf8");
-  await writeFile(changeSpecPath, "# On-disk change spec\n", "utf8");
-
-  const snapshot = await loadDiffSnapshot(changeSpecPath, {
-    changeSpecContent: "# Unsaved change spec\n",
+  const result = await writeBufferWorkspace({
+    context,
+    changeSpecContent: "# Unsaved change\n",
+    mainSpecContent: "# Main spec\n",
   });
 
-  assert.equal(snapshot.mainContent, "# Main spec\n");
-  assert.equal(snapshot.changeContent, "# Unsaved change spec\n");
+  try {
+    assert.equal(
+      await readFile(result.changeSpecPath, "utf8"),
+      "# Unsaved change\n",
+    );
+    assert.equal(
+      await readFile(result.mainSpecPath, "utf8"),
+      "# Main spec\n",
+    );
+
+    const changeContext = getChangeSpecContext(result.changeSpecPath);
+    assert.ok(changeContext, "change spec path should be recognized as a change spec");
+    assert.equal(changeContext.changeName, "single-sign-on");
+    assert.equal(changeContext.relativeSpecPath, path.join("auth", "spec.md"));
+  } finally {
+    await rm(result.tempRoot, { recursive: true, force: true });
+  }
 });
 
-test("loadDiffSnapshot uses unsaved main spec content when provided", async () => {
-  const repoRoot = await createTempRepo();
-  const mainSpecPath = path.join(
-    repoRoot,
-    "openspec",
-    "specs",
-    "auth",
-    "spec.md",
-  );
-  const changeSpecPath = path.join(
-    repoRoot,
-    "openspec",
-    "changes",
-    "single-sign-on",
-    "specs",
-    "auth",
-    "spec.md",
-  );
-  await writeFile(mainSpecPath, "# On-disk main spec\n", "utf8");
-  await writeFile(changeSpecPath, "# Change spec\n", "utf8");
+test("writeBufferWorkspace creates workspace even when main spec content is empty", async () => {
+  const context = {
+    repoRoot: "/repo",
+    changeName: "new-feature",
+    relativeSpecPath: path.join("api", "spec.md"),
+    changeSpecPath: "/repo/openspec/changes/new-feature/specs/api/spec.md",
+    mainSpecPath: "/repo/openspec/specs/api/spec.md",
+  };
 
-  const snapshot = await loadDiffSnapshot(changeSpecPath, {
-    mainSpecContent: "# Unsaved main spec\n",
+  const result = await writeBufferWorkspace({
+    context,
+    changeSpecContent: "## ADDED Requirements\n### Requirement: New API\n",
+    mainSpecContent: "",
   });
 
-  assert.equal(snapshot.mainContent, "# Unsaved main spec\n");
-  assert.equal(snapshot.changeContent, "# Change spec\n");
+  try {
+    assert.equal(
+      await readFile(result.changeSpecPath, "utf8"),
+      "## ADDED Requirements\n### Requirement: New API\n",
+    );
+  } finally {
+    await rm(result.tempRoot, { recursive: true, force: true });
+  }
 });
-
-test("loadDiffSnapshot archives delta specs in a temporary workspace", async () => {
-  const repoRoot = await createTempRepo();
-  const mainSpecPath = path.join(
-    repoRoot,
-    "openspec",
-    "specs",
-    "auth",
-    "spec.md",
-  );
-  const changeSpecPath = path.join(
-    repoRoot,
-    "openspec",
-    "changes",
-    "single-sign-on",
-    "specs",
-    "auth",
-    "spec.md",
-  );
-  const mainContent = "# Main spec\n";
-  const unsavedChange = "## MODIFIED Requirements\n### Requirement: Login\n";
-  await writeFile(mainSpecPath, mainContent, "utf8");
-  await writeFile(changeSpecPath, unsavedChange, "utf8");
-
-  const snapshot = await loadDiffSnapshot(changeSpecPath, {
-    changeSpecContent: unsavedChange,
-    archiveRunner: async ({ tempRoot, changeName, synthesizedSpecPath }) => {
-      assert.equal(changeName, "single-sign-on");
-      const tempChangeSpecPath = path.join(
-        tempRoot,
-        "openspec",
-        "changes",
-        "single-sign-on",
-        "specs",
-        "auth",
-        "spec.md",
-      );
-      assert.equal(await readFile(tempChangeSpecPath, "utf8"), unsavedChange);
-      assert.equal(
-        await readFile(
-          path.join(tempRoot, "openspec", "specs", "auth", "spec.md"),
-          "utf8",
-        ),
-        mainContent,
-      );
-      assert.equal(
-        await readFile(
-          path.join(
-            tempRoot,
-            "openspec",
-            "changes",
-            "single-sign-on",
-            "proposal.md",
-          ),
-          "utf8",
-        ),
-        "# Temporary diff change\n",
-      );
-      await mkdir(path.dirname(synthesizedSpecPath), { recursive: true });
-      await writeFile(synthesizedSpecPath, "# Synthesized spec\n", "utf8");
-      return { stdout: "Archived", stderr: "" };
-    },
-  });
-
-  assert.equal(snapshot.mainContent, mainContent);
-  assert.equal(snapshot.changeContent, "# Synthesized spec\n");
-});
-
-test("loadDiffSnapshot reports archive output files that were not produced", async () => {
-  const repoRoot = await createTempRepo();
-  const changeSpecPath = path.join(
-    repoRoot,
-    "openspec",
-    "changes",
-    "single-sign-on",
-    "specs",
-    "auth",
-    "spec.md",
-  );
-  await writeFile(
-    changeSpecPath,
-    "## MODIFIED Requirements\n### Requirement: Login\n",
-    "utf8",
-  );
-
-  await assert.rejects(
-    loadDiffSnapshot(changeSpecPath, {
-      archiveRunner: async () => ({ stdout: "Archived", stderr: "" }),
-    }),
-    /archive did not produce/,
-  );
-});
-
-async function createTempRepo(): Promise<string> {
-  const repoRoot = await mkdtemp(
-    path.join(os.tmpdir(), "openspec-diff-vscode-test-"),
-  );
-  await mkdir(path.join(repoRoot, "openspec", "specs", "auth"), {
-    recursive: true,
-  });
-  await mkdir(
-    path.join(
-      repoRoot,
-      "openspec",
-      "changes",
-      "single-sign-on",
-      "specs",
-      "auth",
-    ),
-    { recursive: true },
-  );
-  return repoRoot;
-}

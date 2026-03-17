@@ -1,17 +1,24 @@
+import { mkdtemp, readFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
 import * as vscode from "vscode";
 
 import {
-  createDiffDocumentUri,
-  DIFF_SCHEME,
+  cleanupPaths,
   getChangeSpecContext,
   isChangeSpecPath,
-  loadDiffSnapshot,
+  looksLikeDeltaSpec,
+  prepareDiff,
+  readSynthesizedContent,
+  writeBufferWorkspace,
+  writeManagedTempFile,
 } from "./change-spec-diff.js";
 
 let diffController: DiffController | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
-  diffController = new DiffController();
+  diffController = new DiffController(context.extensionPath);
   context.subscriptions.push(diffController);
 }
 
@@ -21,16 +28,11 @@ export function deactivate() {
 }
 
 class DiffController implements vscode.Disposable {
-  private readonly contentProvider = new DiffContentProvider();
   private readonly sessions = new Map<string, DiffSession>();
   private readonly disposables: vscode.Disposable[] = [];
 
-  constructor() {
+  constructor(private readonly extensionPath: string) {
     this.disposables.push(
-      vscode.workspace.registerTextDocumentContentProvider(
-        DIFF_SCHEME,
-        this.contentProvider,
-      ),
       vscode.languages.registerCodeLensProvider(
         { scheme: "file", pattern: "**/openspec/changes/*/specs/**/spec.md" },
         new DiffCodeLensProvider(),
@@ -61,12 +63,17 @@ class DiffController implements vscode.Disposable {
   }
 
   dispose(): void {
+    const cleanupPromises: Promise<void>[] = [];
     for (const session of this.sessions.values()) {
       if (session.timeout) {
         clearTimeout(session.timeout);
       }
+      if (session.managedTempDir) {
+        cleanupPromises.push(cleanupPaths([session.managedTempDir]));
+      }
     }
     this.sessions.clear();
+    void Promise.all(cleanupPromises);
 
     for (const disposable of this.disposables) {
       disposable.dispose();
@@ -81,17 +88,30 @@ class DiffController implements vscode.Disposable {
       return;
     }
 
-    const session = this.getOrCreateSession(uri);
+    const session = await this.getOrCreateSession(uri);
 
     try {
-      await this.refreshSession(session);
-      await vscode.commands.executeCommand(
-        "vscode.diff",
-        session.leftUri,
-        session.rightUri,
-        session.title,
-        { preview: false },
-      );
+      if (session.isDelta) {
+        await vscode.window.withProgress(
+          { location: vscode.ProgressLocation.Window, title: "Loading diff…" },
+          () => this.refreshSession(session),
+        );
+        await vscode.commands.executeCommand(
+          "vscode.diff",
+          vscode.Uri.file(session.mainSpecPath),
+          vscode.Uri.file(session.managedTempFile!),
+          session.title,
+          { preview: false },
+        );
+      } else {
+        await vscode.commands.executeCommand(
+          "vscode.diff",
+          vscode.Uri.file(session.mainSpecPath),
+          session.sourceUri,
+          session.title,
+          { preview: false },
+        );
+      }
     } catch (error) {
       await vscode.window.showErrorMessage(toErrorMessage(error));
     }
@@ -102,7 +122,7 @@ class DiffController implements vscode.Disposable {
       return;
     }
 
-    for (const session of this.getSessionsForUri(uri)) {
+    for (const session of this.getDeltaSessionsForUri(uri)) {
       if (session.timeout) {
         clearTimeout(session.timeout);
       }
@@ -116,37 +136,82 @@ class DiffController implements vscode.Disposable {
   }
 
   private async refreshSession(session: DiffSession): Promise<void> {
-    session.version += 1;
-    const version = session.version;
-    const snapshot = await loadDiffSnapshot(session.sourceUri.fsPath, {
-      changeSpecContent: this.openDocumentText(session.sourceUri),
-      mainSpecContent: this.openDocumentText(session.mainSpecUri),
-    });
-
-    if (version !== session.version) {
+    if (!session.isDelta || !session.managedTempFile) {
       return;
     }
 
-    session.title = snapshot.title;
-    this.contentProvider.update(session.leftUri, snapshot.mainContent);
-    this.contentProvider.update(session.rightUri, snapshot.changeContent);
+    session.version += 1;
+    const version = session.version;
+
+    const changeSpecContent = this.openDocumentText(session.sourceUri)
+      ?? await readFile(session.sourceUri.fsPath, "utf8");
+    const mainSpecContent = this.openDocumentText(
+      vscode.Uri.file(session.mainSpecPath),
+    ) ?? await readFileIfExists(session.mainSpecPath);
+
+    const context = getChangeSpecContextOrThrow(session.sourceUri.fsPath);
+    const config = vscode.workspace.getConfiguration("openspecDiff");
+
+    const bufferWorkspace = await writeBufferWorkspace({
+      context,
+      changeSpecContent,
+      mainSpecContent,
+    });
+
+    const pathsToCleanup = [bufferWorkspace.tempRoot];
+
+    try {
+      const prepared = await prepareDiff({
+        difftoolBin: this.resolveDifftoolBin(config),
+        openspecBin: config.get<string>("openspecBin", "openspec"),
+        mainSpecPath: bufferWorkspace.mainSpecPath,
+        changeSpecPath: bufferWorkspace.changeSpecPath,
+      });
+
+      if (version !== session.version) {
+        pathsToCleanup.push(path.dirname(prepared.right));
+        return;
+      }
+
+      const synthesized = await readSynthesizedContent(prepared);
+      pathsToCleanup.push(path.dirname(prepared.right));
+
+      await writeManagedTempFile(session.managedTempFile, synthesized);
+      session.title = diffTitle(context);
+    } finally {
+      await cleanupPaths(pathsToCleanup);
+    }
   }
 
-  private getOrCreateSession(uri: vscode.Uri): DiffSession {
+  private async getOrCreateSession(uri: vscode.Uri): Promise<DiffSession> {
     const key = uri.toString();
     const existing = this.sessions.get(key);
     if (existing) {
       return existing;
     }
 
-    const source = uri.toString();
-    const changeSpecContext = getChangeSpecContextOrThrow(uri.fsPath);
+    const context = getChangeSpecContextOrThrow(uri.fsPath);
+    const changeSpecContent = this.openDocumentText(uri)
+      ?? await readFile(uri.fsPath, "utf8");
+    const isDelta = looksLikeDeltaSpec(changeSpecContent);
+
+    let managedTempDir: string | undefined;
+    let managedTempFile: string | undefined;
+
+    if (isDelta) {
+      managedTempDir = await mkdtemp(
+        path.join(os.tmpdir(), "openspec-diff-session-"),
+      );
+      managedTempFile = path.join(managedTempDir, "spec.md");
+    }
+
     const session: DiffSession = {
-      title: "OpenSpec Diff",
+      title: diffTitle(context),
       sourceUri: uri,
-      mainSpecUri: vscode.Uri.file(changeSpecContext.mainSpecPath),
-      leftUri: vscode.Uri.parse(createDiffDocumentUri(source, "main")),
-      rightUri: vscode.Uri.parse(createDiffDocumentUri(source, "change")),
+      mainSpecPath: context.mainSpecPath,
+      isDelta,
+      managedTempDir,
+      managedTempFile,
       version: 0,
     };
     this.sessions.set(key, session);
@@ -163,29 +228,24 @@ class DiffController implements vscode.Disposable {
     this.scheduleRefresh(document.uri);
   }
 
-  private getSessionsForUri(uri: vscode.Uri): DiffSession[] {
+  private getDeltaSessionsForUri(uri: vscode.Uri): DiffSession[] {
     const target = uri.toString();
     return [...this.sessions.values()].filter(
       (session) =>
-        session.sourceUri.toString() === target ||
-        session.mainSpecUri.toString() === target,
+        session.isDelta &&
+        (session.sourceUri.toString() === target ||
+          vscode.Uri.file(session.mainSpecPath).toString() === target),
     );
   }
-}
 
-class DiffContentProvider implements vscode.TextDocumentContentProvider {
-  private readonly documents = new Map<string, string>();
-  private readonly emitter = new vscode.EventEmitter<vscode.Uri>();
-
-  readonly onDidChange = this.emitter.event;
-
-  provideTextDocumentContent(uri: vscode.Uri): string {
-    return this.documents.get(uri.toString()) ?? "";
-  }
-
-  update(uri: vscode.Uri, content: string): void {
-    this.documents.set(uri.toString(), content);
-    this.emitter.fire(uri);
+  private resolveDifftoolBin(
+    config: vscode.WorkspaceConfiguration,
+  ): string {
+    const override = config.get<string>("difftoolBin", "");
+    if (override) {
+      return override;
+    }
+    return path.join(this.extensionPath, "dist", "openspec-difftool");
   }
 }
 
@@ -208,11 +268,16 @@ class DiffCodeLensProvider implements vscode.CodeLensProvider {
 interface DiffSession {
   title: string;
   sourceUri: vscode.Uri;
-  mainSpecUri: vscode.Uri;
-  leftUri: vscode.Uri;
-  rightUri: vscode.Uri;
+  mainSpecPath: string;
+  isDelta: boolean;
+  managedTempDir?: string;
+  managedTempFile?: string;
   version: number;
   timeout?: NodeJS.Timeout;
+}
+
+function diffTitle(context: { changeName: string; relativeSpecPath: string }): string {
+  return `OpenSpec Diff: ${context.changeName} — ${context.relativeSpecPath}`;
 }
 
 function getChangeSpecContextOrThrow(changeSpecPath: string) {
@@ -221,6 +286,14 @@ function getChangeSpecContextOrThrow(changeSpecPath: string) {
     throw new Error("Diff is only available for OpenSpec change spec files.");
   }
   return context;
+}
+
+async function readFileIfExists(filePath: string): Promise<string> {
+  try {
+    return await readFile(filePath, "utf8");
+  } catch {
+    return "";
+  }
 }
 
 function toErrorMessage(error: unknown): string {
