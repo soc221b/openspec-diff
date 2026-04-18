@@ -34,7 +34,12 @@ function createRepoRoot(t: test.TestContext): string {
   return root;
 }
 
-function writeSpec(repoRoot: string, target: "main" | "change", change: string, spec: string): void {
+function writeSpec(
+  repoRoot: string,
+  target: "main" | "change",
+  change: string,
+  spec: string,
+): void {
   const basePath =
     target === "main"
       ? path.join(repoRoot, "openspec", "specs")
@@ -107,7 +112,10 @@ test("run supports --specs=all behavior via all selection", async (t) => {
     },
   );
 
-  assert.equal(output.read(), "Diffing auth/spec.md\nDiffing transaction/spec.md\n");
+  assert.equal(
+    output.read(),
+    "Diffing auth/spec.md\nDiffing transaction/spec.md\n",
+  );
   assert.equal(commands.length, 2);
 });
 
