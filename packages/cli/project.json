@@ -9,7 +9,7 @@
       "outputs": ["{projectRoot}/bin"],
       "options": {
         "cwd": "packages/cli",
-        "command": "npm --prefix ../core run build && npm run build"
+        "command": "npm install && npm --prefix ../core run build && npm run build"
       }
     },
     "format": {
@@ -26,6 +26,7 @@
         "parallel": false,
         "commands": [
           "npm install -g @fission-ai/openspec@latest",
+          "npm install",
           "npm --prefix ../core run build",
           "npm run build",
           "npm run test"
