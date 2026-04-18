@@ -1,2 +1,3 @@
 openspec-diff
-single-sign-on\n # \n submits the named change
+\033[B # navigate to single-sign-on
+\n # select the highlighted change

@@ -5,5 +5,8 @@
     "build": "tsc --noEmit && node ./scripts/build.mjs",
     "format": "prettier --check \"src/**/*.ts\" \"test/**/*.test.ts\" \"scripts/**/*.mjs\" \"*.json\"",
     "test": "node --experimental-strip-types --test ./test/**/*.test.ts && node ../../run-test.ts ./tests"
+  },
+  "dependencies": {
+    "inquirer": "13.4.1"
   }
 }

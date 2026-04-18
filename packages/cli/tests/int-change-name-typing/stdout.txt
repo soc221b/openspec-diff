@@ -1,6 +1,6 @@
 ? Select a change to diff
-❯ digital-wallet
-  single-sign-on
+  digital-wallet
+❯ single-sign-on
 
 ↑↓ navigate • ⏎ select
 ✔ Select a change to diff single-sign-on
