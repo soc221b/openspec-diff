@@ -24,7 +24,7 @@
   "scripts": {
     "build": "tsc --noEmit && node ./scripts/build.mjs",
     "format": "prettier --check .",
-    "test": "node --experimental-strip-types --test ./test/**/*.test.ts"
+    "test": "tsx --test ./test/*.test.ts"
   },
   "license": "GPL-3.0-only",
   "devDependencies": {

@@ -1,2 +1,0 @@
-openspec-diff
-single-sign-on\n # \n submits the named change

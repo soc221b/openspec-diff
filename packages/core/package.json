@@ -4,6 +4,6 @@
   "scripts": {
     "build": "tsc --noEmit && node ./scripts/build.mjs",
     "format": "prettier --check \"src/**/*.ts\" \"test/**/*.test.ts\" \"ts/**/*.ts\" \"scripts/**/*.mjs\" \"*.json\"",
-    "test": "node --experimental-strip-types --test ./test/**/*.test.ts && node ../../run-test.ts ./tests"
+    "test": "tsx --test ./test/*.test.ts && tsx ../../run-test.ts ./tests"
   }
 }
