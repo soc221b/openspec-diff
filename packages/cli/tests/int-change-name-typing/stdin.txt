@@ -1,3 +1,0 @@
-openspec-diff
-\033[B # navigate to single-sign-on
-\n # select the highlighted change
