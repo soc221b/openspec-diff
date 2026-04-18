@@ -1,1 +1,1 @@
-openspec-diff missing-change
+openspec-diff --change missing-change
