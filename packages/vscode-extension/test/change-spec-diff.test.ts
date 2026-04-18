@@ -235,10 +235,11 @@ test("loadDiffSnapshot reports archive preprocessing errors for malformed change
 
   await assert.rejects(
     loadDiffSnapshot(changeSpecPath, {
-      archiveRunner: async () => ({
-        stdout: "",
-        stderr: "parse error: expected delta heading",
-      }),
+      archiveRunner: async ({ changeSpecPath: failingPath }) => {
+        throw new Error(
+          `failed to preprocess delta spec ${failingPath}: parse error: expected delta heading`,
+        );
+      },
     }),
     /failed to preprocess delta spec .*parse error: expected delta heading/,
   );
