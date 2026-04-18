@@ -6,11 +6,11 @@ import test from "node:test";
 
 import {
   createDiffDocumentUri,
+  isChangeSpecPath,
   loadDiffSnapshot,
 } from "../src/change-spec-diff.ts";
 import {
   getChangeSpecContext,
-  looksLikeDeltaSpec,
   writeArchiveWorkspaceFiles,
 } from "../../core/ts/change-spec.ts";
 
@@ -32,11 +32,6 @@ test("getChangeSpecContext resolves change and main spec paths", () => {
     changeSpecPath: specPath,
     mainSpecPath: path.join("/repo", "openspec", "specs", "auth", "spec.md"),
   });
-});
-
-test("looksLikeDeltaSpec detects OpenSpec delta markers", () => {
-  assert.equal(looksLikeDeltaSpec("## MODIFIED Requirements\n"), true);
-  assert.equal(looksLikeDeltaSpec("# Plain spec\n"), false);
 });
 
 test("writeArchiveWorkspaceFiles creates the temporary archive workspace", async () => {
@@ -108,7 +103,7 @@ test("createDiffDocumentUri encodes the source document and side", () => {
   assert.equal(parsed.searchParams.get("side"), "change");
 });
 
-test("loadDiffSnapshot uses unsaved change content for non-delta specs", async () => {
+test("loadDiffSnapshot always archives change specs, even without delta markers", async () => {
   const repoRoot = await createTempRepo();
   const mainSpecPath = path.join(
     repoRoot,
@@ -126,15 +121,36 @@ test("loadDiffSnapshot uses unsaved change content for non-delta specs", async (
     "auth",
     "spec.md",
   );
-  await writeFile(mainSpecPath, "# Main spec\n", "utf8");
-  await writeFile(changeSpecPath, "# On-disk change spec\n", "utf8");
+  const mainContent = "# Main spec\n";
+  const unsavedChange = "# Not marked as delta\n";
+  await writeFile(mainSpecPath, mainContent, "utf8");
+  await writeFile(changeSpecPath, unsavedChange, "utf8");
 
+  let archiveInvoked = false;
   const snapshot = await loadDiffSnapshot(changeSpecPath, {
-    changeSpecContent: "# Unsaved change spec\n",
+    changeSpecContent: unsavedChange,
+    archiveRunner: async ({ tempRoot, changeName, synthesizedSpecPath }) => {
+      archiveInvoked = true;
+      assert.equal(changeName, "single-sign-on");
+      const tempChangeSpecPath = path.join(
+        tempRoot,
+        "openspec",
+        "changes",
+        "single-sign-on",
+        "specs",
+        "auth",
+        "spec.md",
+      );
+      assert.equal(await readFile(tempChangeSpecPath, "utf8"), unsavedChange);
+      await mkdir(path.dirname(synthesizedSpecPath), { recursive: true });
+      await writeFile(synthesizedSpecPath, "# Synthesized spec\n", "utf8");
+      return { stdout: "Archived", stderr: "" };
+    },
   });
 
-  assert.equal(snapshot.mainContent, "# Main spec\n");
-  assert.equal(snapshot.changeContent, "# Unsaved change spec\n");
+  assert.equal(archiveInvoked, true);
+  assert.equal(snapshot.mainContent, mainContent);
+  assert.equal(snapshot.changeContent, "# Synthesized spec\n");
 });
 
 test("loadDiffSnapshot uses unsaved main spec content when provided", async () => {
@@ -156,25 +172,23 @@ test("loadDiffSnapshot uses unsaved main spec content when provided", async () =
     "spec.md",
   );
   await writeFile(mainSpecPath, "# On-disk main spec\n", "utf8");
-  await writeFile(changeSpecPath, "# Change spec\n", "utf8");
+  await writeFile(changeSpecPath, "## MODIFIED Requirements\n", "utf8");
 
   const snapshot = await loadDiffSnapshot(changeSpecPath, {
     mainSpecContent: "# Unsaved main spec\n",
+    archiveRunner: async ({ synthesizedSpecPath }) => {
+      await mkdir(path.dirname(synthesizedSpecPath), { recursive: true });
+      await writeFile(synthesizedSpecPath, "# Synthesized spec\n", "utf8");
+      return { stdout: "Archived", stderr: "" };
+    },
   });
 
   assert.equal(snapshot.mainContent, "# Unsaved main spec\n");
-  assert.equal(snapshot.changeContent, "# Change spec\n");
+  assert.equal(snapshot.changeContent, "# Synthesized spec\n");
 });
 
-test("loadDiffSnapshot archives delta specs in a temporary workspace", async () => {
+test("loadDiffSnapshot supports new specs without a main spec", async () => {
   const repoRoot = await createTempRepo();
-  const mainSpecPath = path.join(
-    repoRoot,
-    "openspec",
-    "specs",
-    "auth",
-    "spec.md",
-  );
   const changeSpecPath = path.join(
     repoRoot,
     "openspec",
@@ -184,53 +198,50 @@ test("loadDiffSnapshot archives delta specs in a temporary workspace", async () 
     "auth",
     "spec.md",
   );
-  const mainContent = "# Main spec\n";
-  const unsavedChange = "## MODIFIED Requirements\n### Requirement: Login\n";
-  await writeFile(mainSpecPath, mainContent, "utf8");
+  const unsavedChange = "## ADDED Requirements\n### Requirement: SSO\n";
   await writeFile(changeSpecPath, unsavedChange, "utf8");
 
   const snapshot = await loadDiffSnapshot(changeSpecPath, {
-    changeSpecContent: unsavedChange,
-    archiveRunner: async ({ tempRoot, changeName, synthesizedSpecPath }) => {
-      assert.equal(changeName, "single-sign-on");
-      const tempChangeSpecPath = path.join(
-        tempRoot,
-        "openspec",
-        "changes",
-        "single-sign-on",
-        "specs",
-        "auth",
-        "spec.md",
-      );
-      assert.equal(await readFile(tempChangeSpecPath, "utf8"), unsavedChange);
-      assert.equal(
-        await readFile(
+    archiveRunner: async ({ tempRoot, synthesizedSpecPath }) => {
+      await assert.rejects(
+        readFile(
           path.join(tempRoot, "openspec", "specs", "auth", "spec.md"),
           "utf8",
         ),
-        mainContent,
-      );
-      assert.equal(
-        await readFile(
-          path.join(
-            tempRoot,
-            "openspec",
-            "changes",
-            "single-sign-on",
-            "proposal.md",
-          ),
-          "utf8",
-        ),
-        "# Temporary diff change\n",
+        (error: NodeJS.ErrnoException) => error.code === "ENOENT",
       );
       await mkdir(path.dirname(synthesizedSpecPath), { recursive: true });
-      await writeFile(synthesizedSpecPath, "# Synthesized spec\n", "utf8");
+      await writeFile(synthesizedSpecPath, "# New synthesized spec\n", "utf8");
       return { stdout: "Archived", stderr: "" };
     },
   });
 
-  assert.equal(snapshot.mainContent, mainContent);
-  assert.equal(snapshot.changeContent, "# Synthesized spec\n");
+  assert.equal(snapshot.mainContent, "");
+  assert.equal(snapshot.changeContent, "# New synthesized spec\n");
+});
+
+test("loadDiffSnapshot reports archive preprocessing errors for malformed change specs", async () => {
+  const repoRoot = await createTempRepo();
+  const changeSpecPath = path.join(
+    repoRoot,
+    "openspec",
+    "changes",
+    "single-sign-on",
+    "specs",
+    "auth",
+    "spec.md",
+  );
+  await writeFile(changeSpecPath, "# malformed\n", "utf8");
+
+  await assert.rejects(
+    loadDiffSnapshot(changeSpecPath, {
+      archiveRunner: async () => ({
+        stdout: "",
+        stderr: "parse error: expected delta heading",
+      }),
+    }),
+    /failed to preprocess delta spec .*parse error: expected delta heading/,
+  );
 });
 
 test("loadDiffSnapshot reports archive output files that were not produced", async () => {
@@ -256,6 +267,28 @@ test("loadDiffSnapshot reports archive output files that were not produced", asy
     }),
     /archive did not produce/,
   );
+});
+
+test("isChangeSpecPath only matches files in the change-spec directory", () => {
+  const validPath = path.join(
+    "/repo",
+    "openspec",
+    "changes",
+    "single-sign-on",
+    "specs",
+    "auth",
+    "spec.md",
+  );
+  const outsidePath = path.join(
+    "/repo",
+    "openspec",
+    "specs",
+    "auth",
+    "spec.md",
+  );
+
+  assert.equal(isChangeSpecPath(validPath), true);
+  assert.equal(isChangeSpecPath(outsidePath), false);
 });
 
 async function createTempRepo(): Promise<string> {

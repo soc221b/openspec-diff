@@ -75,13 +75,6 @@ export function getChangeSpecContext(
   }
 }
 
-export function looksLikeDeltaSpec(content: string): boolean {
-  const lines = content.split(/\r?\n/);
-  return DELTA_MARKERS.some((marker) =>
-    lines.some((line) => line.trim() === marker),
-  );
-}
-
 export function getSynthesizedSpecPath(
   tempRoot: string,
   context: Pick<ChangeSpecContext, "relativeSpecPath">,

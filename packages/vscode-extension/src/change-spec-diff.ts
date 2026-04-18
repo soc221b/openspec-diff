@@ -6,14 +6,13 @@ import path from "node:path";
 import {
   getChangeSpecContext,
   getSynthesizedSpecPath,
-  looksLikeDeltaSpec,
   type ChangeSpecContext,
   writeArchiveWorkspaceFiles,
 } from "../../core/ts/change-spec.ts";
 const ABORTED_ARCHIVE_MARKER = "Aborted. No files were changed.";
 
 export const DIFF_SCHEME = "openspec-diff";
-export { getChangeSpecContext, looksLikeDeltaSpec };
+export { getChangeSpecContext };
 
 export interface DiffSnapshot {
   title: string;
@@ -70,15 +69,6 @@ export async function loadDiffSnapshot(
   const changeSpecContent =
     options.changeSpecContent ??
     (await readFile(context.changeSpecPath, "utf8"));
-
-  if (!looksLikeDeltaSpec(changeSpecContent)) {
-    return {
-      title: diffTitle(context),
-      mainContent,
-      changeContent: changeSpecContent,
-      context,
-    };
-  }
 
   const changeContent = await archiveChangeSpec(
     context,
