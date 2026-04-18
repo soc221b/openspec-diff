@@ -1,1 +1,1 @@
-openspec-diff order-tracking-portal auth,shipping
+openspec-diff --change order-tracking-portal --spec auth --spec shipping

@@ -5,57 +5,92 @@ import process from "node:process";
 
 import { run } from "./app.ts";
 
-const HELP_TEXT = `Usage: openspec-diff [options] [change-name] [spec-name[,spec-name...]]
+const HELP_TEXT = `Usage: openspec-diff [options]
 
 Show changes between delta specs of a change and the main specs
 
 Options:
-  -h, --help       display help for command
-  --specs          diff all specs without prompting
+  -h, --help         display help for command
+  --change <name>    change to diff without prompting
+  --spec <name>      spec to diff without prompting (repeatable)
+  --specs            diff all specs without prompting
 `;
 
 function hasHelpArg(args: string[]): boolean {
   return args.some((arg) => arg === "--help" || arg === "-h");
 }
 
-function parsePositionalArgs(args: string[]): [string, string] {
-  const positionalArgs: string[] = [];
+function parseArgs(args: string[]): [string, string] {
+  let changeName = "";
+  const selectedSpecs: string[] = [];
   let allSpecs = false;
 
-  for (const arg of args) {
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+
     if (arg === "--specs") {
       allSpecs = true;
       continue;
     }
+
+    if (arg === "--change" || arg.startsWith("--change=")) {
+      if (changeName !== "") {
+        throw new Error("--change can only be provided once");
+      }
+
+      if (arg === "--change") {
+        const value = args[index + 1];
+        if (!value || value.startsWith("-")) {
+          throw new Error("--change requires a value");
+        }
+        changeName = value;
+        index += 1;
+        continue;
+      }
+
+      const value = arg.slice("--change=".length).trim();
+      if (value === "") {
+        throw new Error("--change requires a value");
+      }
+      changeName = value;
+      continue;
+    }
+
+    if (arg === "--spec" || arg.startsWith("--spec=")) {
+      let value = "";
+      if (arg === "--spec") {
+        const nextValue = args[index + 1];
+        if (!nextValue || nextValue.startsWith("-")) {
+          throw new Error("--spec requires a value");
+        }
+        value = nextValue;
+        index += 1;
+      } else {
+        value = arg.slice("--spec=".length).trim();
+        if (value === "") {
+          throw new Error("--spec requires a value");
+        }
+      }
+
+      selectedSpecs.push(value);
+      continue;
+    }
+
     if (arg.startsWith("-")) {
       throw new Error(`unknown option ${JSON.stringify(arg)}`);
     }
-    positionalArgs.push(arg);
-  }
 
-  if (positionalArgs.length > 2) {
     throw new Error(
-      "expected at most one change name argument and one spec name argument",
+      `unexpected positional argument ${JSON.stringify(arg)}; use --change and --spec instead`,
     );
   }
 
-  if (allSpecs) {
-    if (positionalArgs.length === 2) {
-      throw new Error("cannot use --specs with a spec name argument");
-    }
-    if (positionalArgs.length === 0) {
-      return ["", "all"];
-    }
-    return [positionalArgs[0], "all"];
+  if (allSpecs && selectedSpecs.length > 0) {
+    throw new Error("cannot use --specs with --spec");
   }
 
-  if (positionalArgs.length === 0) {
-    return ["", ""];
-  }
-  if (positionalArgs.length === 1) {
-    return [positionalArgs[0], ""];
-  }
-  return [positionalArgs[0], positionalArgs[1]];
+  const specName = allSpecs ? "all" : selectedSpecs.join(",");
+  return [changeName, specName];
 }
 
 async function runCommand(
@@ -99,7 +134,7 @@ async function main(args = process.argv.slice(2)): Promise<void> {
     return;
   }
 
-  const [changeName, specName] = parsePositionalArgs(args);
+  const [changeName, specName] = parseArgs(args);
   await run(
     process.stdin,
     process.stdout,

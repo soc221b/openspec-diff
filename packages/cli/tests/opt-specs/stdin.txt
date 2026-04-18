@@ -1,1 +1,1 @@
-openspec-diff --specs digital-wallet
+openspec-diff --change digital-wallet --specs

@@ -1,1 +1,1 @@
-openspec-diff digital-wallet transaction
+openspec-diff --change digital-wallet --spec transaction
