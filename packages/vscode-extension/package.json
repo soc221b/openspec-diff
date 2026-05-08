@@ -1,9 +1,20 @@
 {
-  "name": "@openspec-diff/vscode-extension",
+  "name": "openspec-diff-vscode-extension",
   "version": "1.0.0",
+  "publisher": "soc221b",
   "displayName": "OpenSpec Diff",
   "description": "Minimal VSCode extension scaffold for openspec-diff.",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/soc221b/openspec-diff.git",
+    "directory": "packages/vscode-extension"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
   "main": "./dist/extension.js",
   "type": "module",
   "engines": {
@@ -24,12 +35,14 @@
   "scripts": {
     "build": "tsc --noEmit && node ./scripts/build.mjs",
     "format": "prettier --check .",
+    "install:local": "npm run build && vsce package --no-dependencies --out ../../dist/openspec-diff.vsix && code --install-extension ../../dist/openspec-diff.vsix --force",
     "test": "tsx --test ./test/*.test.ts"
   },
   "license": "GPL-3.0-only",
   "devDependencies": {
     "@types/node": "^25.5.0",
     "@types/vscode": "^1.110.0",
+    "@vscode/vsce": "^3.9.1",
     "esbuild": "^0.28.0",
     "prettier": "^3.8.1",
     "typescript": "^6.0.0"
