@@ -35,7 +35,7 @@
   "scripts": {
     "build": "tsc --noEmit && node ./scripts/build.mjs",
     "format": "prettier --check .",
-    "install:local": "npm run build && vsce package --no-dependencies --out ../../dist/openspec-diff.vsix && code --install-extension ../../dist/openspec-diff.vsix --force",
+    "install:local": "node -e \"require('node:fs').mkdirSync('../../dist', { recursive: true })\" && npm run build && vsce package --no-dependencies --out ../../dist/openspec-diff.vsix && code --install-extension ../../dist/openspec-diff.vsix --force",
     "test": "tsx --test ./test/*.test.ts"
   },
   "license": "GPL-3.0-only",
