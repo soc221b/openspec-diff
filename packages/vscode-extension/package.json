@@ -13,7 +13,8 @@
   "files": [
     "dist",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "main": "./dist/extension.js",
   "type": "module",
@@ -36,7 +37,8 @@
     "build": "tsc --noEmit && node ./scripts/build.mjs",
     "format": "prettier --check .",
     "install:local": "node -e \"require('node:fs').mkdirSync('../../dist', { recursive: true })\" && npm run build && vsce package --no-dependencies --out ../../dist/openspec-diff.vsix && code --install-extension ../../dist/openspec-diff.vsix --force",
-    "test": "tsx --test ./test/*.test.ts"
+    "test": "tsx --test ./test/*.test.ts",
+    "publish": "vsce publish --no-dependencies --skip-duplicate"
   },
   "license": "GPL-3.0-only",
   "devDependencies": {
